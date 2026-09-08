@@ -21,7 +21,7 @@ from app.models.workspace import Workspace
 from app.models.workspace_invitation import WorkspaceInvitation
 from app.models.workspace_member import WorkspaceMember
 from app.routers.documents import _process_document_background
-from app.schemas.document import DocumentOut, PaginatedDocuments
+from app.schemas.document import DocumentOut, DocumentUpdate, PaginatedDocuments
 from app.schemas.folder import AddTagsToFolder, FolderCreate, FolderOut, FolderUpdate
 from app.schemas.group import (
     GroupCreate,
@@ -311,6 +311,52 @@ async def share_documents(
         await share_document_to_group(db, document_id, group_id, current_user.id)
     return ShareResult(shared_count=len(payload.document_ids))
 
+# ==========================================
+# API CẬP NHẬT TÀI LIỆU NHÓM (Bọc cả 2 route trailing slash)
+# ==========================================
+@router.patch("/groups/{group_id}/documents/{document_id}", response_model=DocumentOut)
+@router.patch("/groups/{group_id}/documents/{document_id}/", response_model=DocumentOut)
+async def update_group_document(
+    group_id: int,
+    document_id: int,
+    payload: DocumentUpdate,  # Hoặc dùng dict/schema update của bạn
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cập nhật thông tin/đổi tên tài liệu nhóm"""
+    # 1. Kiểm tra quyền của người dùng trong nhóm
+    await require_full_permission(db, group_id, current_user.id)
+    
+    # 2. Truy vấn tài liệu
+    result = await db.execute(
+        select(Document)
+        .options(selectinload(Document.tags))
+        .where(
+            Document.id == document_id,
+            Document.workspace_id == group_id,
+            Document.is_deleted == False
+        )
+    )
+    document = result.scalar_one_or_none()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Không tìm thấy tài liệu trong nhóm này"
+        )
+    
+    # 3. Cập nhật thông tin
+    if payload.title is not None:
+        document.title = payload.title
+    if hasattr(payload, 'description') and payload.description is not None:
+        document.description = payload.description
+    if hasattr(payload, 'category_id') and payload.category_id is not None:
+        document.category_id = payload.category_id
+        
+    await db.commit()
+    await db.refresh(document)
+    
+    return document
 
 @router.post("/groups/{group_id}/share/folder", response_model=ShareResult)
 async def share_folder(

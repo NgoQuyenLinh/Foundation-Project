@@ -1,4 +1,4 @@
-// frontend/digital-library/src/pages/group/components/LocalGroupDocumentCard.tsx
+// src/pages/group/components/LocalGroupDocumentCard.tsx
 
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/Card";
@@ -14,7 +14,7 @@ export default function LocalGroupDocumentCard({
   groupId,
   onSave,
   onDelete,
-  onRename, // <-- 1. Nhận thêm prop onRename
+  onRename,
 }: LocalGroupDocumentCardProps) {
   const navigate = useNavigate();
 
@@ -29,7 +29,7 @@ export default function LocalGroupDocumentCard({
       case "save-to-personal":
         await onSave?.(document.id);
         break;
-      case "rename": // <-- 2. Bổ sung case xử lý đổi tên
+      case "rename":
         onRename?.(document.id, document.title);
         break;
       case "delete":
@@ -44,25 +44,53 @@ export default function LocalGroupDocumentCard({
     }
   };
 
+  const tags = document.tags || [];
+
   return (
-    <Card className="group relative flex aspect-[1/0.82] flex-col p-0 transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md">
-      <div className="flex flex-[0_0_60%] items-center justify-center overflow-hidden rounded-t-xl bg-gray-50">
+    <Card className="group relative flex flex-col p-0 transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md">
+      <div 
+        className="flex h-[130px] w-full items-center justify-center overflow-hidden rounded-t-xl bg-gray-50 cursor-pointer"
+        onClick={() => navigate(`/groups/${groupId}/documents/${document.id}`)}
+      >
         <FileIcon
           type={document.file_type}
-          className="h-16 w-16"
-          iconClassName="h-8 w-8"
+          className="h-14 w-14"
+          iconClassName="h-7 w-7"
         />
       </div>
-      <div className="flex flex-1 items-start gap-2 px-3 py-3">
-        <div className="min-w-0 flex-1">
-          <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-gray-900">
+      <div className="flex flex-1 items-start justify-between gap-2 px-3 py-3">
+        <div 
+          className="min-w-0 flex-1 cursor-pointer"
+          onClick={() => navigate(`/groups/${groupId}/documents/${document.id}`)}
+        >
+          <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-gray-900" title={document.title}>
             {document.title}
           </h3>
           <p className="mt-1 text-xs text-gray-400">
             {formatSize(document.file_size)} ·{" "}
             {formatRelativeDate(document.created_at)}
           </p>
+
+          {/* --- HIỂN THỊ TAGS --- */}
+          {tags.length > 0 ? (
+            <div
+              className="mt-1.5 line-clamp-2 overflow-hidden text-xs italic leading-4 text-gray-400"
+              title={tags.map((tag: any) => `#${tag.name}`).join(" ")}
+            >
+              {tags.map((tag: any, index: number) => (
+                <span key={tag.id || index}>
+                  #{tag.name}
+                  {index < tags.length - 1 && " "}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-1.5 text-xs italic leading-4 text-gray-300">
+              Chưa có tag
+            </p>
+          )}
         </div>
+
         <GroupDocumentContextMenu
           onAction={handleAction}
           permission={permission}

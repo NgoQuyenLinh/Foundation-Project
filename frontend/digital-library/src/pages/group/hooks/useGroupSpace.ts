@@ -7,7 +7,10 @@ import type { FolderAction } from "@/components/shared/FolderContextMenu";
 import { groupService } from "@/services/groupService";
 import { groupTagService } from "@/services/tagService";
 import { groupFolderService } from "@/services/folderService";
-import { documentService } from "@/services/documentService";
+import {
+  documentService,
+  groupDocumentService,
+} from "@/services/documentService";
 import { useAuthStore } from "@/stores/authStore";
 import type { PermissionLevel } from "@/types/group";
 import type { GroupTab } from "../types/groupSpace.types";
@@ -38,7 +41,9 @@ export function useGroupSpace() {
   const [activeDocumentTab, setActiveDocumentTab] = useState<TabKey>("all");
 
   // Modals
-  const [shareModal, setShareModal] = useState<"documents" | "folder" | "invite" | null>(null);
+  const [shareModal, setShareModal] = useState<
+    "documents" | "folder" | "invite" | null
+  >(null);
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
@@ -49,13 +54,19 @@ export function useGroupSpace() {
     color: string;
     tagIds: number[];
   } | null>(null);
-  const [deletingFolder, setDeletingFolder] = useState<{ id: number; name: string } | null>(null);
+  const [deletingFolder, setDeletingFolder] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
   const [isDeleteFolderOpen, setIsDeleteFolderOpen] = useState(false);
   const [isDeletingFolder, setIsDeletingFolder] = useState(false);
 
   // Quản lý Đổi tên tài liệu nhóm (Sử dụng chung RenameDocumentModal)
   const [isGroupRenameModalOpen, setIsGroupRenameModalOpen] = useState(false);
-  const [renamingGroupDoc, setRenamingGroupDoc] = useState<{ id: string | number; title: string } | null>(null);
+  const [renamingGroupDoc, setRenamingGroupDoc] = useState<{
+    id: string | number;
+    title: string;
+  } | null>(null);
 
   // --------------------------------------------------------------------------
   // 4. QUERIES (FETCHING DATA - Phần phụ thuộc dữ liệu cơ bản)
@@ -140,13 +151,16 @@ export function useGroupSpace() {
   // Lọc tài liệu tổng hợp theo Search, Tag, FileType, Tab
   const filteredDocuments = (documents || []).filter((doc: any) => {
     const docName = doc.title || doc.name || "";
-    if (searchQuery && !docName.toLowerCase().includes(searchQuery.toLowerCase())) {
+    if (
+      searchQuery &&
+      !docName.toLowerCase().includes(searchQuery.toLowerCase())
+    ) {
       return false;
     }
 
     if (selectedTagId !== null) {
       const hasTag = doc.tags?.some(
-        (t: any) => t.id === selectedTagId || t.tag_id === selectedTagId
+        (t: any) => t.id === selectedTagId || t.tag_id === selectedTagId,
       );
       if (!hasTag) return false;
     }
@@ -163,7 +177,11 @@ export function useGroupSpace() {
       if (activeDocumentTab === "pdf") {
         if (!fileType.includes("pdf") && ext !== "pdf") return false;
       } else if (activeDocumentTab === "image") {
-        if (!fileType.startsWith("image/") && !["jpg", "jpeg", "png", "webp", "svg"].includes(ext)) return false;
+        if (
+          !fileType.startsWith("image/") &&
+          !["jpg", "jpeg", "png", "webp", "svg"].includes(ext)
+        )
+          return false;
       } else if (activeDocumentTab === "document") {
         const isDoc =
           fileType.includes("word") ||
@@ -178,7 +196,19 @@ export function useGroupSpace() {
           fileType.includes("word") ||
           fileType.includes("presentation") ||
           fileType.includes("spreadsheet") ||
-          ["pdf", "jpg", "jpeg", "png", "webp", "doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext);
+          [
+            "pdf",
+            "jpg",
+            "jpeg",
+            "png",
+            "webp",
+            "doc",
+            "docx",
+            "ppt",
+            "pptx",
+            "xls",
+            "xlsx",
+          ].includes(ext);
         if (isKnown) return false;
       }
     }
@@ -226,6 +256,22 @@ export function useGroupSpace() {
     },
     onError: (error) => {
       console.error("Lỗi khi đổi tên tài liệu nhóm:", error);
+    },
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: (fd: FormData) => groupDocumentService.upload(fd, groupId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["group-documents", groupId] });
+    },
+  });
+
+  const createTagMutation = useMutation({
+    mutationFn: (name: string) =>
+      groupTagService.create({ name, color: "#2F6B3C" }, groupId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["group-tags", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["workspace-tags", groupId] });
     },
   });
 
@@ -290,7 +336,10 @@ export function useGroupSpace() {
     }
   };
 
-  const handleRenameDocument = (docId: string | number, currentTitle: string) => {
+  const handleRenameDocument = (
+    docId: string | number,
+    currentTitle: string,
+  ) => {
     setRenamingGroupDoc({ id: docId, title: currentTitle });
     setIsGroupRenameModalOpen(true);
   };
@@ -352,5 +401,7 @@ export function useGroupSpace() {
     setRenamingGroupDoc,
     renameGroupDocumentMutation,
     handleRenameDocument,
+    uploadMutation,  
+    createTagMutation, 
   };
 }

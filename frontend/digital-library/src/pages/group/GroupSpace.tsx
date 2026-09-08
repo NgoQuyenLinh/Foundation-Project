@@ -17,7 +17,6 @@ import { DynamicFilterDropdown } from "@/components/shared/DynamicFilterDropdown
 import { DocumentTypeTabs } from "@/components/shared/DocumentTypeTabs";
 
 import { CreateFolderModal } from "@/pages/personal/components/CreateFolderModal";
-import { GroupUploadModal } from "./components/GroupUploadModal";
 
 import { groupService } from "@/services/groupService";
 import { groupTagService } from "@/services/tagService";
@@ -42,6 +41,7 @@ import { getNormalizedExtension } from "@/hooks/useDocumentFilters";
 import { GroupFolderModalContainer } from "./components/GroupFolderModalContainer";
 import { RenameDocumentModal } from "@/components/shared/RenameDocumentModal";
 import { GroupDocumentsSection } from "./components/GroupDocumentsSection";
+import { GroupUploadModal } from "./components/GroupUploadModal";
 
 export default function GroupSpace() {
   const {
@@ -96,6 +96,8 @@ export default function GroupSpace() {
     renamingGroupDoc,
     renameGroupDocumentMutation,
     handleRenameDocument,
+    uploadMutation,
+    createTagMutation,
   } = useGroupSpace();
 
   if (workspaceLoading) {
@@ -199,34 +201,34 @@ export default function GroupSpace() {
           ))}
       </div>
 
-{/* TAB TÀI LIỆU */}
-{activeTab === "documents" && (
-  <GroupDocumentsSection
-    activeDocumentTab={activeDocumentTab}
-    setActiveDocumentTab={setActiveDocumentTab}
-    searchQuery={searchQuery}
-    setSearchQuery={setSearchQuery}
-    workspaceTags={workspaceTags}
-    selectedTagId={selectedTagId}
-    setSelectedTagId={setSelectedTagId}
-    fileTypes={fileTypes}
-    selectedFileType={selectedFileType}
-    setSelectedFileType={setSelectedFileType}
-    filteredDocuments={filteredDocuments}
-    folders={folders}
-    docsLoading={docsLoading}
-    foldersLoading={foldersLoading}
-    permission={permission}
-    isOwner={isOwner}
-    groupId={groupId}
-    saveDocument={saveDocument}
-    deleteDocument={deleteDocument}
-    handleRenameDocument={handleRenameDocument}
-    setEditingFolder={setEditingFolder}
-    setIsFolderModalOpen={setIsFolderModalOpen}
-    handleFolderAction={handleFolderAction}
-  />
-)}
+      {/* TAB TÀI LIỆU */}
+      {activeTab === "documents" && (
+        <GroupDocumentsSection
+          activeDocumentTab={activeDocumentTab}
+          setActiveDocumentTab={setActiveDocumentTab}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          workspaceTags={workspaceTags}
+          selectedTagId={selectedTagId}
+          setSelectedTagId={setSelectedTagId}
+          fileTypes={fileTypes}
+          selectedFileType={selectedFileType}
+          setSelectedFileType={setSelectedFileType}
+          filteredDocuments={filteredDocuments}
+          folders={folders}
+          docsLoading={docsLoading}
+          foldersLoading={foldersLoading}
+          permission={permission}
+          isOwner={isOwner}
+          groupId={groupId}
+          saveDocument={saveDocument}
+          deleteDocument={deleteDocument}
+          handleRenameDocument={handleRenameDocument}
+          setEditingFolder={setEditingFolder}
+          setIsFolderModalOpen={setIsFolderModalOpen}
+          handleFolderAction={handleFolderAction}
+        />
+      )}
 
       {activeTab === "members" && (
         <MembersTab
@@ -256,68 +258,73 @@ export default function GroupSpace() {
 
       {/* Modals */}
       {/* Group Folder Modal Container */}
-    <GroupFolderModalContainer
-      isOpen={isFolderModalOpen}
-      groupId={groupId}
-      editingFolder={editingFolder}
-      groupTags={groupTags}
-      onClose={() => {
-        setIsFolderModalOpen(false);
-        setEditingFolder(null);
-      }}
-      onCreateTag={(name) =>
-        groupTagService.create({ name, color: "#2F6B3C" }, groupId)
-      }
-      onSubmitData={async (data) => {
-        if (editingFolder) {
-          await groupFolderService.update(
-            editingFolder.id,
-            { name: data.name, color: data.color },
-            groupId
-          );
-        } else {
-          const newFolder = await groupFolderService.create(
-            { name: data.name, color: data.color },
-            groupId
-          );
-
-          if (data.tagIds.length > 0) {
-            await Promise.all(
-              data.tagIds.map((tagId) =>
-                groupFolderService.attachFolderTag(groupId, newFolder.id, tagId)
-              )
+      <GroupFolderModalContainer
+        isOpen={isFolderModalOpen}
+        groupId={groupId}
+        editingFolder={editingFolder}
+        groupTags={groupTags}
+        onClose={() => {
+          setIsFolderModalOpen(false);
+          setEditingFolder(null);
+        }}
+        onCreateTag={(name) =>
+          groupTagService.create({ name, color: "#2F6B3C" }, groupId)
+        }
+        onSubmitData={async (data) => {
+          if (editingFolder) {
+            await groupFolderService.update(
+              editingFolder.id,
+              { name: data.name, color: data.color },
+              groupId,
             );
+          } else {
+            const newFolder = await groupFolderService.create(
+              { name: data.name, color: data.color },
+              groupId,
+            );
+
+            if (data.tagIds.length > 0) {
+              await Promise.all(
+                data.tagIds.map((tagId) =>
+                  groupFolderService.attachFolderTag(
+                    groupId,
+                    newFolder.id,
+                    tagId,
+                  ),
+                ),
+              );
+            }
           }
-        }
 
-        setIsFolderModalOpen(false);
-        setEditingFolder(null);
-        queryClient.invalidateQueries({
-          queryKey: ["group-folders", groupId],
-        });
-      }}
-    />
-
-    {/* Shared Rename Modal */}
-    <RenameDocumentModal
-      isOpen={isGroupRenameModalOpen && !!renamingGroupDoc}
-      initialTitle={renamingGroupDoc?.title || ""}
-      isPending={renameGroupDocumentMutation.isPending}
-      onClose={() => setIsGroupRenameModalOpen(false)}
-      onConfirm={(newTitle) => {
-        if (renamingGroupDoc) {
-          renameGroupDocumentMutation.mutate({
-            id: renamingGroupDoc.id,
-            title: newTitle,
+          setIsFolderModalOpen(false);
+          setEditingFolder(null);
+          queryClient.invalidateQueries({
+            queryKey: ["group-folders", groupId],
           });
-        }
-      }}
-    />
+        }}
+      />
+
+      {/* Shared Rename Modal */}
+      <RenameDocumentModal
+        isOpen={isGroupRenameModalOpen && !!renamingGroupDoc}
+        initialTitle={renamingGroupDoc?.title || ""}
+        isPending={renameGroupDocumentMutation.isPending}
+        onClose={() => setIsGroupRenameModalOpen(false)}
+        onConfirm={(newTitle) => {
+          if (renamingGroupDoc) {
+            renameGroupDocumentMutation.mutate({
+              id: renamingGroupDoc.id,
+              title: newTitle,
+            });
+          }
+        }}
+      />
       {isUploadModalOpen && (
         <GroupUploadModal
-          groupId={groupId}
-          groupTags={groupTags}
           onClose={() => setIsUploadModalOpen(false)}
+          tags={groupTags} // Hoặc workspaceTags tùy vào logic của bạn
+          createTagMutation={createTagMutation}
+          uploadMutation={uploadMutation}
         />
       )}
 

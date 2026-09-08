@@ -16,8 +16,11 @@ class TagUpdate(BaseModel):
     color: Optional[str] = Field(default=None, max_length=7)
     parent_id: Optional[int] = None
 
-class TagOut(TagBase):
+class TagOut(BaseModel):
     id: int
-    owner_id: int
+    name: str
+    color: Optional[str] = None
+    owner_id: Optional[int] = None  
+    workspace_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)

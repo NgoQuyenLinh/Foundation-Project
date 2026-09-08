@@ -9,6 +9,9 @@ import { useDocumentFilters } from "@/hooks/useDocumentFilters";
 import { groupTagService } from "@/services/tagService";
 import LocalGroupDocumentCard from "./LocalGroupDocumentCard";
 import type { DocumentsTabProps } from "../types/groupSpace.types";
+import { formatRelativeDate } from "@/utils/formatDate";
+import { formatSize } from "@/utils/formatSize";
+import { getFileExtension } from "@/utils/file";
 
 export default function DocumentsTab({
   documents,
@@ -24,12 +27,15 @@ export default function DocumentsTab({
   onFolderAction,
 }: DocumentsTabProps) {
   const docCards = documents.map((doc) => ({
-    id: doc.id,
+    id: doc.id.toString(), // Chuyển sang string cho khớp với DocumentCardProps
     name: doc.title,
-    rawType: doc.file_type || null,
-    extension: null as string | null,
     type: doc.file_type || "unknown",
-    tags: (doc as any).tags || [],
+    updatedAt: formatRelativeDate(doc.created_at), 
+    size: formatSize(doc.file_size || 0),          
+    extension: getFileExtension(doc.file_path, doc.file_type, doc.title),
+    thumbnail_path: doc.thumbnail_path || null,
+    file_path: doc.file_path || null,             
+    tags: doc.tags || [],                         
     _original: doc,
   }));
 

@@ -1,58 +1,52 @@
 // src/pages/group/components/GroupUploadModal.tsx
 
-import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { UploadModal, type TagItem } from "@/components/shared/UploadModal";
-import { groupTagService } from "@/services/tagService";
-import { groupDocumentService } from "@/services/documentService";
 
 interface GroupUploadModalProps {
-  groupId: number;
-  groupTags?: TagItem[];
   onClose: () => void;
+  tags?: any[];
+  createTagMutation: { mutateAsync: (name: string) => Promise<any> };
+  uploadMutation: { mutateAsync: (fd: FormData) => Promise<any>; isPending: boolean };
 }
 
 export function GroupUploadModal({
-  groupId,
-  groupTags = [],
   onClose,
+  tags = [],
+  createTagMutation,
+  uploadMutation,
 }: GroupUploadModalProps) {
-  const queryClient = useQueryClient();
-  const [isUploading, setIsUploading] = useState(false);
-
-  const handleCreateTag = async (name: string) => {
-    return await groupTagService.create({ name, color: "#2F6B3C" }, groupId);
-  };
+  // Chuẩn hóa ID của Tag: Ưu tiên tag_id (ID gốc trong DB) rồi mới tới id
+  const normalizedTags: TagItem[] = tags.map((t: any) => ({
+    id: t.tag_id ?? t.id,
+    name: t.name,
+    color: t.color,
+  }));
 
   const handleUpload = async (formData: FormData, selectedTagIds: number[]) => {
-    setIsUploading(true);
-    try {
-      const newDoc = await groupDocumentService.upload(formData, groupId);
-
-      if (selectedTagIds.length > 0) {
-        await Promise.all(
-          selectedTagIds.map((tagId) =>
-            groupDocumentService.attachTag(groupId, newDoc.id, tagId)
-          )
-        );
-      }
-
-      queryClient.invalidateQueries({
-        queryKey: ["group-documents", groupId],
+    if (selectedTagIds.length > 0) {
+      selectedTagIds.forEach((id) => {
+        formData.append("tag_ids", id.toString());
       });
-      onClose();
-    } finally {
-      setIsUploading(false);
     }
+
+    await uploadMutation.mutateAsync(formData);
+    onClose();
   };
 
   return (
     <UploadModal
       onClose={onClose}
-      availableTags={groupTags}
-      onCreateTag={handleCreateTag}
+      availableTags={normalizedTags}
+      onCreateTag={async (name) => {
+        const newTag = await createTagMutation.mutateAsync(name);
+        return {
+          id: newTag.tag_id ?? newTag.id,
+          name: newTag.name,
+          color: newTag.color,
+        };
+      }}
       onUpload={handleUpload}
-      isUploading={isUploading}
+      isUploading={uploadMutation.isPending}
     />
   );
 }

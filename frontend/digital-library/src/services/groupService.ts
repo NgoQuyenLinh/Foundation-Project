@@ -101,7 +101,7 @@ export const groupService = {
 
   // Cập nhật danh sách tags cho tài liệu nhóm
   updateTags: (groupId: number, docId: number, tagIds: number[]) =>
-    api.put<Document>(`/groups/${groupId}/documents/${docId}/tags`, { tag_ids: tagIds }).then((r) => r.data),
+    api.patch<Document>(`/groups/${groupId}/documents/${docId}/tags`, { tag_ids: tagIds }).then((r) => r.data),
 
   // Xóa 1 tag khỏi tài liệu nhóm
   removeTag: (groupId: number, docId: number, tagId: number) =>
