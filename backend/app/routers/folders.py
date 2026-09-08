@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-
+from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.folder import Folder
@@ -88,35 +88,47 @@ async def get_folder(
     return next((f for f in folders if f["id"] == folder_id), None)
 
 
-@router.post("/", response_model=FolderOut, status_code=201)
+@router.post("/", response_model=FolderOut, status_code=status.HTTP_201_CREATED)
 async def create_folder(
-    payload: FolderCreate,
+    folder_in: FolderCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """Tạo thư mục cá nhân hoặc thư mục trong Workspace."""
-    if payload.workspace_id:
-        await verify_workspace_access(payload.workspace_id, current_user.id, db)
+    workspace_id = getattr(folder_in, "workspace_id", None)
 
-    folder = Folder(
+    new_folder = Folder(
+        name=folder_in.name,
+        color=folder_in.color,
         owner_id=current_user.id,
-        name=payload.name,
-        color=payload.color,
-        workspace_id=payload.workspace_id
+        workspace_id=workspace_id,
     )
-    db.add(folder)
-    await db.flush()
+    
+    # 1. Xử lý gắn tags trước khi đưa vào DB
+    if folder_in.tag_ids:
+        result = await db.execute(select(Tag).where(Tag.id.in_(folder_in.tag_ids)))
+        tags = result.scalars().all()
+        new_folder.tags = list(tags)
+    else:
+        new_folder.tags = []
 
-    for tag_id in payload.tag_ids:
-        tag = await db.get(Tag, tag_id)
-        if tag and tag.owner_id == current_user.id:
-            db.add(FolderTag(folder_id=folder.id, tag_id=tag_id))
-
+    db.add(new_folder)
     await db.commit()
-    await db.refresh(folder)
+    
+    # 2. KHÔNG dùng db.refresh(). Thay vào đó, query lại thư mục vừa tạo 
+    # và nạp sẵn (eager load) quan hệ tags để Pydantic có thể đọc an toàn.
+    stmt = (
+        select(Folder)
+        .options(selectinload(Folder.tags))
+        .where(Folder.id == new_folder.id)
+    )
+    result = await db.execute(stmt)
+    created_folder = result.scalar_one()
 
-    folders = await get_folders_with_stats(db, current_user.id, workspace_id=payload.workspace_id)
-    return next(f for f in folders if f["id"] == folder.id)
+    # 3. Gán các giá trị thống kê đếm (nếu Schema yêu cầu)
+    created_folder.document_count = 0
+    created_folder.tag_count = len(created_folder.tags)
+
+    return created_folder
 
 
 @router.patch("/{folder_id}", response_model=FolderOut)

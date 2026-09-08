@@ -15,7 +15,7 @@ import type { TabKey } from "@/hooks/useDocumentFilters";
 
 export function useGroupSpace() {
   // --------------------------------------------------------------------------
-  // ROUTING & NAVIGATION
+  // 1. ROUTING & NAVIGATION
   // --------------------------------------------------------------------------
   const { id } = useParams<{ id: string }>();
   const groupId = Number(id);
@@ -24,15 +24,14 @@ export function useGroupSpace() {
   const activeTab = (searchParams.get("tab") as GroupTab) || "documents";
 
   // --------------------------------------------------------------------------
-  // GLOBAL STORES & QUERY CLIENT
+  // 2. GLOBAL STORES & QUERY CLIENT
   // --------------------------------------------------------------------------
   const queryClient = useQueryClient();
   const currentUser = useAuthStore((state) => state.user);
 
   // --------------------------------------------------------------------------
-  // LOCAL STATES
+  // 3. LOCAL STATES & FILTERS
   // --------------------------------------------------------------------------
-  // Bộ lọc
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [selectedFileType, setSelectedFileType] = useState<string | null>(null);
@@ -54,8 +53,12 @@ export function useGroupSpace() {
   const [isDeleteFolderOpen, setIsDeleteFolderOpen] = useState(false);
   const [isDeletingFolder, setIsDeletingFolder] = useState(false);
 
+  // Quản lý Đổi tên tài liệu nhóm (Sử dụng chung RenameDocumentModal)
+  const [isGroupRenameModalOpen, setIsGroupRenameModalOpen] = useState(false);
+  const [renamingGroupDoc, setRenamingGroupDoc] = useState<{ id: string | number; title: string } | null>(null);
+
   // --------------------------------------------------------------------------
-  // QUERIES (FETCHING DATA)
+  // 4. QUERIES (FETCHING DATA - Phần phụ thuộc dữ liệu cơ bản)
   // --------------------------------------------------------------------------
   const { data: workspaceTags = [] } = useQuery({
     queryKey: ["workspace-tags", groupId],
@@ -108,7 +111,7 @@ export function useGroupSpace() {
   });
 
   // --------------------------------------------------------------------------
-  // DERIVED DATA & PERMISSIONS
+  // 5. DERIVED DATA & PERMISSIONS (Được đưa lên trước Trash Query để xác định isOwner)
   // --------------------------------------------------------------------------
   const documents = documentsData?.items ?? [];
   const folders = foldersData;
@@ -123,15 +126,18 @@ export function useGroupSpace() {
   const permission: PermissionLevel = currentMember?.permission_level ?? "view";
   const canManageDocuments = isOwner || permission === "full";
 
-  // Trash Query
+  // --------------------------------------------------------------------------
+  // 6. TRASH QUERY (Đặt ở đây vì đã có biến isOwner được khai báo ở trên)
+  // --------------------------------------------------------------------------
   const { data: trashData = [] } = useQuery({
     queryKey: ["group-trash", groupId],
     queryFn: () => groupService.getTrash(groupId),
     enabled: isOwner,
   });
+
   const trash = trashData;
 
-  // Lọc tài liệu tổng hợp
+  // Lọc tài liệu tổng hợp theo Search, Tag, FileType, Tab
   const filteredDocuments = (documents || []).filter((doc: any) => {
     const docName = doc.title || doc.name || "";
     if (searchQuery && !docName.toLowerCase().includes(searchQuery.toLowerCase())) {
@@ -145,13 +151,11 @@ export function useGroupSpace() {
       if (!hasTag) return false;
     }
 
-    // Lọc theo Dropdown loại tài liệu
     if (selectedFileType !== null) {
       const fileType = doc.file_type || doc.rawType;
       if (fileType !== selectedFileType) return false;
     }
 
-    // Lọc theo Tab loại tài liệu
     if (activeDocumentTab !== "all") {
       const fileType = (doc.file_type || doc.rawType || "").toLowerCase();
       const ext = (doc.extension || "").toLowerCase();
@@ -183,7 +187,7 @@ export function useGroupSpace() {
   });
 
   // --------------------------------------------------------------------------
-  // EFFECTS & NAVIGATION GUARDS
+  // 7. EFFECTS & NAVIGATION GUARDS
   // --------------------------------------------------------------------------
   useEffect(() => {
     if (!id || isNaN(groupId)) {
@@ -192,7 +196,7 @@ export function useGroupSpace() {
   }, [id, groupId, navigate]);
 
   // --------------------------------------------------------------------------
-  // MUTATIONS
+  // 8. MUTATIONS (ACTIONS: SAVE, DELETE, RENAME)
   // --------------------------------------------------------------------------
   const documentMutationOptions = {
     onSuccess: () => {
@@ -212,8 +216,21 @@ export function useGroupSpace() {
     ...documentMutationOptions,
   });
 
+  const renameGroupDocumentMutation = useMutation({
+    mutationFn: ({ id, title }: { id: string | number; title: string }) =>
+      groupService.updateDocument(groupId, Number(id), { title }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["group-documents", groupId] });
+      setIsGroupRenameModalOpen(false);
+      setRenamingGroupDoc(null);
+    },
+    onError: (error) => {
+      console.error("Lỗi khi đổi tên tài liệu nhóm:", error);
+    },
+  });
+
   // --------------------------------------------------------------------------
-  // EVENT HANDLERS
+  // 9. EVENT HANDLERS (FOLDERS & DOCUMENTS)
   // --------------------------------------------------------------------------
   const setTab = (tab: GroupTab) =>
     setSearchParams(tab === "documents" ? {} : { tab });
@@ -273,6 +290,14 @@ export function useGroupSpace() {
     }
   };
 
+  const handleRenameDocument = (docId: string | number, currentTitle: string) => {
+    setRenamingGroupDoc({ id: docId, title: currentTitle });
+    setIsGroupRenameModalOpen(true);
+  };
+
+  // --------------------------------------------------------------------------
+  // 10. RETURN VALUES (EXPOSED TO GROUP SPACE COMPONENT)
+  // --------------------------------------------------------------------------
   return {
     groupId,
     navigate,
@@ -321,5 +346,11 @@ export function useGroupSpace() {
     handleFolderAction,
     handleCancelDeleteFolder,
     handleConfirmDeleteFolder,
+    isGroupRenameModalOpen,
+    setIsGroupRenameModalOpen,
+    renamingGroupDoc,
+    setRenamingGroupDoc,
+    renameGroupDocumentMutation,
+    handleRenameDocument,
   };
 }

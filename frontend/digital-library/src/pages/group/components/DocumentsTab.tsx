@@ -19,6 +19,7 @@ export default function DocumentsTab({
   groupId,
   onSave,
   onDelete,
+  onRename, // <-- Bổ sung destructure onRename
   onAddFolder,
   onFolderAction,
 }: DocumentsTabProps) {
@@ -31,24 +32,20 @@ export default function DocumentsTab({
     tags: (doc as any).tags || [],
     _original: doc,
   }));
+
   const { data: workspaceTags = [] } = useQuery({
     queryKey: ["workspace-tags", groupId],
     queryFn: () => groupTagService.getWorkspaceTags(Number(groupId)),
     enabled: !!groupId,
   });
 
-  // Helper lấy danh sách tag chi tiết cho từng folder
   const getFolderTags = (folder: any) => {
-    // Trường hợp 1: Backend folder đã trả về full danh sách object tags
     if (Array.isArray(folder.tags) && folder.tags.length > 0) {
       return folder.tags;
     }
-
-    // Trường hợp 2: Backend folder chỉ trả về tag_ids -> Map từ workspaceTags
     if (Array.isArray(folder.tag_ids) && folder.tag_ids.length > 0) {
       return workspaceTags.filter((t: any) => folder.tag_ids.includes(t.id));
     }
-
     return [];
   };
 
@@ -114,6 +111,7 @@ export default function DocumentsTab({
           )}
         </div>
       </section>
+
       <section>
         <h2 className="mb-3 text-sm font-semibold text-gray-700">
           Tài liệu mới nhất
@@ -128,6 +126,7 @@ export default function DocumentsTab({
                 groupId={groupId}
                 onSave={onSave}
                 onDelete={onDelete}
+                onRename={onRename} 
               />
             ))}
           </div>

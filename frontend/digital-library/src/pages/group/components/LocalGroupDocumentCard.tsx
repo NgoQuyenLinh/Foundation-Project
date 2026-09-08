@@ -14,6 +14,7 @@ export default function LocalGroupDocumentCard({
   groupId,
   onSave,
   onDelete,
+  onRename, // <-- 1. Nhận thêm prop onRename
 }: LocalGroupDocumentCardProps) {
   const navigate = useNavigate();
 
@@ -26,13 +27,16 @@ export default function LocalGroupDocumentCard({
         console.log("Download", document.id);
         break;
       case "save-to-personal":
-        await onSave(document.id);
+        await onSave?.(document.id);
+        break;
+      case "rename": // <-- 2. Bổ sung case xử lý đổi tên
+        onRename?.(document.id, document.title);
         break;
       case "delete":
         if (
           window.confirm("Bạn có chắc chắn muốn xóa tài liệu này khỏi nhóm?")
         ) {
-          await onDelete(document.id);
+          await onDelete?.(document.id);
         }
         break;
       default:
@@ -41,9 +45,7 @@ export default function LocalGroupDocumentCard({
   };
 
   return (
-    /* 1. Bỏ overflow-hidden khỏi Card để menu hiển thị tràn ra ngoài */
     <Card className="group relative flex aspect-[1/0.82] flex-col p-0 transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md">
-      {/* 2. Thêm rounded-t-xl overflow-hidden vào phần thumbnail để giữ góc bo phía trên */}
       <div className="flex flex-[0_0_60%] items-center justify-center overflow-hidden rounded-t-xl bg-gray-50">
         <FileIcon
           type={document.file_type}

@@ -94,16 +94,22 @@ export function CreateFolderModal({ onClose, initialData, availableTags, onCreat
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  try {
+    // Thêm await để đợi Mutation xử lý xong từ API
     await onSubmitData({
       id: initialData?.id,
       name: folderName.trim() || "Chưa có tên",
       color: selectedColor,
       tagIds: selectedTagIds,
     });
+    // Sau khi xử lý xong mới tự động đóng Modal
     onClose();
-  };
+  } catch (error) {
+    console.error("Lỗi khi lưu thư mục:", error);
+  }
+};
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">

@@ -28,6 +28,7 @@ export interface DocumentsTabProps {
   groupId: number;
   onSave: (docId: number) => Promise<unknown>;
   onDelete: (docId: number) => Promise<unknown>;
+  onRename?: (docId: string | number, currentTitle: string) => void;
   onAddFolder: () => void;
   onFolderAction: (action: FolderAction, folderId: number) => void;
 }
@@ -38,6 +39,7 @@ export interface LocalGroupDocumentCardProps {
   groupId: number;
   onSave: (docId: number) => Promise<unknown>;
   onDelete: (docId: number) => Promise<unknown>;
+  onRename?: (docId: string | number, currentTitle: string) => void;
 }
 
 export interface MembersTabProps {
