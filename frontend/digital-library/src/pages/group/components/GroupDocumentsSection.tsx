@@ -1,4 +1,4 @@
-// src/pages/group/components/GroupDocumentsSection.tsx
+// frontend/digital-library/src/pages/group/components/GroupDocumentsSection.tsx
 
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/Input";
@@ -9,6 +9,7 @@ import type { Document, Folder } from "@/types/document";
 import type { PermissionLevel } from "@/types/group";
 import type { FolderAction } from "@/components/shared/FolderContextMenu";
 import DocumentsTab from "./DocumentsTab";
+import type { DocumentAction } from "@/components/shared/DocumentContextMenu";
 
 export interface WorkspaceTag {
   id?: number;
@@ -18,6 +19,8 @@ export interface WorkspaceTag {
 }
 
 export interface GroupDocumentsSectionProps {
+  selectedFolderId?: number | null; // BỔ SUNG PROP
+  onSelectFolder?: (id: number | null) => void; // BỔ SUNG PROP
   activeDocumentTab: TabKey;
   setActiveDocumentTab: (tab: TabKey) => void;
   searchQuery: string;
@@ -41,9 +44,12 @@ export interface GroupDocumentsSectionProps {
   setEditingFolder: (folder: any) => void;
   setIsFolderModalOpen: (open: boolean) => void;
   handleFolderAction: (action: FolderAction, folderId: number) => void;
+  onDocumentAction?: (action: DocumentAction | string, docId: string) => void;
 }
 
 export function GroupDocumentsSection({
+  selectedFolderId = null,
+  onSelectFolder,
   activeDocumentTab,
   setActiveDocumentTab,
   searchQuery,
@@ -67,6 +73,7 @@ export function GroupDocumentsSection({
   setEditingFolder,
   setIsFolderModalOpen,
   handleFolderAction,
+  onDocumentAction,
 }: GroupDocumentsSectionProps) {
   return (
     <div className="flex flex-col gap-4">
@@ -116,6 +123,8 @@ export function GroupDocumentsSection({
       <DocumentsTab
         documents={filteredDocuments}
         folders={folders}
+        selectedFolderId={selectedFolderId} 
+        onSelectFolder={onSelectFolder}     
         isLoading={docsLoading || foldersLoading}
         permission={permission}
         isOwner={isOwner}

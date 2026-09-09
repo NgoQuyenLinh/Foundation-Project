@@ -15,6 +15,8 @@ from app.models.workspace import Workspace
 from app.models.workspace_member import WorkspaceMember
 from app.schemas.folder import FolderOut, FolderCreate, FolderUpdate, AddTagsToFolder
 from app.services.folder_service import get_folders_with_stats
+from sqlalchemy import delete
+from app.models.folder_tag import FolderTag
 
 router = APIRouter(prefix="/folders", tags=["folders"])
 
@@ -102,20 +104,17 @@ async def create_folder(
         owner_id=current_user.id,
         workspace_id=workspace_id,
     )
-    
-    # 1. Xử lý gắn tags trước khi đưa vào DB
-    if folder_in.tag_ids:
-        result = await db.execute(select(Tag).where(Tag.id.in_(folder_in.tag_ids)))
-        tags = result.scalars().all()
-        new_folder.tags = list(tags)
-    else:
-        new_folder.tags = []
-
     db.add(new_folder)
+    await db.flush()  # Lấy new_folder.id trước khi commit
+
+    # 1. Gán tags trực tiếp vào bảng trung gian FolderTag
+    if folder_in.tag_ids:
+        for tid in folder_in.tag_ids:
+            db.add(FolderTag(folder_id=new_folder.id, tag_id=tid))
+
     await db.commit()
     
-    # 2. KHÔNG dùng db.refresh(). Thay vào đó, query lại thư mục vừa tạo 
-    # và nạp sẵn (eager load) quan hệ tags để Pydantic có thể đọc an toàn.
+    # 2. Query lại thư mục và nạp sẵn tags để trả về Schema
     stmt = (
         select(Folder)
         .options(selectinload(Folder.tags))
@@ -124,11 +123,11 @@ async def create_folder(
     result = await db.execute(stmt)
     created_folder = result.scalar_one()
 
-    # 3. Gán các giá trị thống kê đếm (nếu Schema yêu cầu)
     created_folder.document_count = 0
     created_folder.tag_count = len(created_folder.tags)
 
     return created_folder
+
 
 
 @router.patch("/{folder_id}", response_model=FolderOut)
@@ -195,13 +194,13 @@ async def add_tags_to_folder(
 
     for tag_id in payload.tag_ids:
         tag = await db.get(Tag, tag_id)
-        if tag and tag.owner_id == current_user.id:
+        # Bỏ kiểm tra owner_id của tag để cho phép gán mọi tag hợp lệ
+        if tag:
             existing = await db.get(FolderTag, (folder_id, tag_id))
             if not existing:
                 db.add(FolderTag(folder_id=folder_id, tag_id=tag_id))
 
     await db.commit()
-
 
 @router.delete("/{folder_id}/tags/{tag_id}", status_code=204)
 async def remove_tag_from_folder(

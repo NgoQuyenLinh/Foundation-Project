@@ -106,4 +106,10 @@ export const groupService = {
   // Xóa 1 tag khỏi tài liệu nhóm
   removeTag: (groupId: number, docId: number, tagId: number) =>
     api.delete<Document>(`/groups/${groupId}/documents/${docId}/tags/${tagId}`).then((r) => r.data),
+
+  async getWorkspaceTags(groupId: number | string): Promise<any[]> {
+    // Sửa '/workspaces/' thành '/groups/' để lấy trực tiếp bảng Tag
+    const response = await api.get(`/groups/${groupId}/tags/`);
+    return response.data;
+  }
 };

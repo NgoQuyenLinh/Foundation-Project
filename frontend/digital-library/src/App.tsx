@@ -1,23 +1,23 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AuthLayout } from '@/layouts/AuthLayout';
-import { MainLayout } from '@/layouts/MainLayout';
-import { LoginPage } from '@/pages/auth/LoginPage';
-import { PersonalDashboard } from '@/pages/personal/PersonalDashboard';
-import { PersonalDocuments } from '@/pages/personal/PersonalDocuments';
-import { DocumentDetail } from '@/components/shared/DocumentDetail';
-import SharedWithMe from '@/pages/personal/SharedWithMe';
-import FavoritesPage from '@/pages/personal/FavoritesPage';
-import TrashPage from '@/pages/trash/TrashPage';
-import GroupList from '@/pages/group/GroupList';
-import GroupSpace from '@/pages/group/GroupSpace';
-import ClassSpace from '@/pages/class/ClassSpace';
-import FacultySpace from '@/pages/faculty/FacultySpace';
-import SchoolSpace from '@/pages/school/SchoolSpace';
-import StatsPage from '@/pages/stats/StatsPage';
-import SettingsPage from '@/pages/settings/SettingsPage';
-import ProtectedRoute from '@/components/shared/ProtectedRoute';
-import { useRestoreSession } from '@/hooks/useRestoreSession';
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AuthLayout } from "@/layouts/AuthLayout";
+import { MainLayout } from "@/layouts/MainLayout";
+import { LoginPage } from "@/pages/auth/LoginPage";
+import { PersonalDashboard } from "@/pages/personal/PersonalDashboard";
+import { PersonalDocuments } from "@/pages/personal/PersonalDocuments";
+import { DocumentDetail } from "@/components/shared/DocumentDetail";
+import SharedWithMe from "@/pages/personal/SharedWithMe";
+import FavoritesPage from "@/pages/personal/FavoritesPage";
+import TrashPage from "@/pages/trash/TrashPage";
+import GroupList from "@/pages/group/GroupList";
+import GroupSpace from "@/pages/group/GroupSpace";
+import ClassSpace from "@/pages/class/ClassSpace";
+import FacultySpace from "@/pages/faculty/FacultySpace";
+import SchoolSpace from "@/pages/school/SchoolSpace";
+import StatsPage from "@/pages/stats/StatsPage";
+import SettingsPage from "@/pages/settings/SettingsPage";
+import ProtectedRoute from "@/components/shared/ProtectedRoute";
+import { useRestoreSession } from "@/hooks/useRestoreSession";
 import GroupDocumentDetailPage from "@/pages/group/GroupDocumentDetailPage";
 
 const queryClient = new QueryClient({
@@ -65,17 +65,32 @@ function AppRoutes() {
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
 
+          <Route
+            path="/groups/:id/documents/:docId"
+            element={<GroupDocumentDetailPage />}
+          />
+
+          <Route path="/class" element={<ClassSpace />} />
+          <Route path="/stats" element={<StatsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+
           {/* Admin only routes */}
-          <Route element={<ProtectedRoute allowedRoles={['faculty_admin', 'school_admin', 'system_admin']} />}>
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={["faculty_admin", "school_admin", "system_admin"]}
+              />
+            }
+          >
             <Route path="/faculty" element={<FacultySpace />} />
             <Route path="/school" element={<SchoolSpace />} />
           </Route>
         </Route>
       </Route>
       <Route
-  path="/groups/:id/documents/:docId"
-  element={<GroupDocumentDetailPage />}
-/>
+        path="/groups/:id/documents/:docId"
+        element={<GroupDocumentDetailPage />}
+      />
 
       {/* Fallback */}
       <Route path="/" element={<Navigate to="/personal" replace />} />

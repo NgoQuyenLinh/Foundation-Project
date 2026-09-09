@@ -1,40 +1,36 @@
-// frontend/digital-library/src/pages/group/components/GroupDocumentCard.tsx
+// src/pages/group/components/GroupDocumentCard.tsx
 
-import { DocumentCard, type DocumentCardProps } from "@/components/shared/DocumentCard";
-import { type GroupPermission } from "./GroupDocumentContextMenu";
-import { type DocumentAction, type DocumentMenuItem } from "@/components/shared/DocumentContextMenu";
-import { Save } from "lucide-react";
+import { DocumentCard } from "@/components/shared/DocumentCard";
+import type { DocCardType } from "@/pages/personal/components/PersonalDocumentsSection";
+import type { DocumentAction } from "@/components/shared/DocumentContextMenu";
 
-export interface GroupDocumentCardProps extends Omit<DocumentCardProps, "allowedActions" | "extraItems" | "basePath"> {
-  groupId: number | string;
-  permission: GroupPermission;
+interface GroupDocumentCardProps {
+  document: any; // document object từ API
+  groupId: number;
+  onDocumentAction: (action: DocumentAction | string, docId: string) => void;
 }
 
-export function GroupDocumentCard({ groupId, permission, ...props }: GroupDocumentCardProps) {
-  let allowedActions: DocumentAction[] = [];
+export function GroupDocumentCard({
+  document,
+  groupId,
+  onDocumentAction,
+}: GroupDocumentCardProps) {
+  // Ánh xạ dữ liệu sang DocCardType
+  const docCard: DocCardType = {
+    id: String(document.id),
+    name: document.title,
+    type: document.file_type || "unknown",
+    updatedAt: document.updated_at || document.created_at,
+    size: document.file_size || 0,
+    extension: document.extension,
+    thumbnail_path: document.thumbnail_path,
+    file_path: document.file_path,
+    owner: document.owner
+      ? { name: document.owner.name, avatar: document.owner.avatar }
+      : undefined,
+    rawType: document.file_type,
+    tags: document.tags || [],
+  };
 
-  if (permission === "owner" || permission === "full") {
-    allowedActions = ["view", "download", "share", "favorite", "rename", "move", "delete"];
-  } else if (permission === "view") {
-    allowedActions = ["view", "download", "favorite"];
-  }
-
-  const extraItems: DocumentMenuItem[] = [
-    {
-      action: "save-to-personal",
-      icon: <Save className="h-4 w-4" />,
-      label: "Lưu về cá nhân",
-    }
-  ];
-
-  const basePath = `/groups/${groupId}/documents`;
-
-  return (
-    <DocumentCard
-      {...props}
-      basePath={basePath}
-      allowedActions={allowedActions}
-      extraItems={extraItems}
-    />
-  );
+  return <DocumentCard document={docCard} onAction={onDocumentAction} />;
 }

@@ -12,11 +12,6 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Dropdown } from "@/components/ui/Dropdown";
-import { Input } from "@/components/ui/Input";
-import { DynamicFilterDropdown } from "@/components/shared/DynamicFilterDropdown";
-import { DocumentTypeTabs } from "@/components/shared/DocumentTypeTabs";
-
-import { CreateFolderModal } from "@/pages/personal/components/CreateFolderModal";
 
 import { groupService } from "@/services/groupService";
 import { groupTagService } from "@/services/tagService";
@@ -28,7 +23,6 @@ import { formatRelativeDate } from "@/utils/formatDate";
 import type { GroupTab } from "./types/groupSpace.types";
 import { TAB_LABELS } from "./types/groupSpace.types";
 
-import DocumentsTab from "./components/DocumentsTab";
 import MembersTab from "./components/MembersTab";
 import RequestsTab from "./components/RequestsTab";
 import SettingsTab from "./components/SettingsTab";
@@ -37,11 +31,11 @@ import SimpleShareModal from "./components/SimpleShareModal";
 import InviteModal from "./components/InviteModal";
 
 import { useGroupSpace } from "./hooks/useGroupSpace";
-import { getNormalizedExtension } from "@/hooks/useDocumentFilters";
 import { GroupFolderModalContainer } from "./components/GroupFolderModalContainer";
 import { RenameDocumentModal } from "@/components/shared/RenameDocumentModal";
-import { GroupDocumentsSection } from "./components/GroupDocumentsSection";
 import { GroupUploadModal } from "./components/GroupUploadModal";
+import { GroupDocumentsSection } from "./components/GroupDocumentsSection";
+import { CreateFolderModal } from "@/components/shared/CreateFolderModal";
 
 export default function GroupSpace() {
   const {
@@ -98,6 +92,13 @@ export default function GroupSpace() {
     handleRenameDocument,
     uploadMutation,
     createTagMutation,
+    handleFolderSubmit,
+    handleCreateGroupTag,
+    isSubmittingFolder,
+    createFolderMutation,
+    updateFolderMutation,
+    selectedFolderId,       
+    handleSelectFolder,    
   } = useGroupSpace();
 
   if (workspaceLoading) {
@@ -204,6 +205,8 @@ export default function GroupSpace() {
       {/* TAB TÀI LIỆU */}
       {activeTab === "documents" && (
         <GroupDocumentsSection
+        selectedFolderId={selectedFolderId}     
+          onSelectFolder={handleSelectFolder}      
           activeDocumentTab={activeDocumentTab}
           setActiveDocumentTab={setActiveDocumentTab}
           searchQuery={searchQuery}
@@ -303,6 +306,39 @@ export default function GroupSpace() {
           });
         }}
       />
+
+      {isFolderModalOpen && (
+        <CreateFolderModal
+          onClose={() => {
+            setIsFolderModalOpen(false);
+            setEditingFolder(null);
+          }}
+          initialData={editingFolder}
+          availableTags={workspaceTags}
+          onCreateTag={handleCreateGroupTag}
+          isSubmitting={
+            createFolderMutation.isPending || updateFolderMutation.isPending
+          }
+          onSubmitData={async (data) => {
+            if (data.id) {
+              await updateFolderMutation.mutateAsync({
+                id: data.id,
+                name: data.name,
+                color: data.color,
+                tagIds: data.tagIds,
+              });
+            } else {
+              await createFolderMutation.mutateAsync({
+                name: data.name,
+                color: data.color,
+                tagIds: data.tagIds,
+              });
+            }
+            setIsFolderModalOpen(false);
+            setEditingFolder(null);
+          }}
+        />
+      )}
 
       {/* Shared Rename Modal */}
       <RenameDocumentModal

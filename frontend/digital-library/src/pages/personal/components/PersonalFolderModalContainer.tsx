@@ -1,5 +1,5 @@
 // src/pages/personal/components/PersonalFolderModalContainer.tsx
-import { CreateFolderModal, type FolderInitialData } from "@/pages/personal/components/CreateFolderModal";
+import { CreateFolderModal, type FolderInitialData } from "@/components/shared/CreateFolderModal";
 
 interface PersonalFolderModalContainerProps {
   isOpen: boolean;

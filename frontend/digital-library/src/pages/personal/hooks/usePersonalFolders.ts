@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { folderService } from "@/services/folderService";
 import { tagService } from "@/services/tagService";
 import type { FolderAction } from "@/components/shared/FolderContextMenu";
-import type { FolderInitialData } from "../components/CreateFolderModal";
+import type { FolderInitialData } from "../../../components/shared/CreateFolderModal";
 
 export function usePersonalFolders() {
   const queryClient = useQueryClient();
@@ -43,14 +43,35 @@ const createFolderMutation = useMutation({
   });
 
 const updateFolderMutation = useMutation({
-    mutationFn: async (data: { id: number; name: string; color?: string; tagIds?: number[]; initialTagIds?: number[]; }) => {
+    mutationFn: async (data: {
+      id: number;
+      name: string;
+      color?: string;
+      tagIds?: number[];
+      initialTagIds?: number[];
+    }) => {
+      // 1. Cập nhật Tên và Màu thư mục
       await folderService.update(data.id, { name: data.name, color: data.color });
-      if (data.tagIds) {
-      await folderService.addTags(data.id, data.tagIds);
-    }
+
+      // 2. Đồng bộ danh sách Tags
+      if (data.tagIds && data.initialTagIds) {
+        const toRemove = data.initialTagIds.filter((id) => !data.tagIds?.includes(id));
+        const toAdd = data.tagIds.filter((id) => !data.initialTagIds?.includes(id));
+
+        // Xóa các tag bị hủy chọn
+        for (const tagId of toRemove) {
+          await folderService.removeTag(data.id, tagId);
+        }
+        // Thêm các tag mới được chọn
+        if (toAdd.length > 0) {
+          await folderService.addTags(data.id, toAdd);
+        }
+      } else if (data.tagIds && data.tagIds.length > 0) {
+        await folderService.addTags(data.id, data.tagIds);
+      }
     },
     onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ["folders"] });
+      queryClient.invalidateQueries({ queryKey: ["folders"] });
     },
   });
 

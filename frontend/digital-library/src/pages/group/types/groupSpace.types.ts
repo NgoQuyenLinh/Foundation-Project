@@ -22,6 +22,8 @@ export interface DocumentsTabProps {
     document_count: number;
     color?: string | null;
   }[];
+  selectedFolderId?: number | null; 
+  onSelectFolder?: (id: number | null) => void;  
   isLoading: boolean;
   permission: PermissionLevel;
   isOwner: boolean;

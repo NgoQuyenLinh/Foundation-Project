@@ -1,6 +1,6 @@
 // frontend/digital-library/src/pages/group/hooks/useGroupSpace.ts
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react"; // 1. Bổ sung useMemo
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FolderAction } from "@/components/shared/FolderContextMenu";
@@ -17,24 +17,19 @@ import type { GroupTab } from "../types/groupSpace.types";
 import type { TabKey } from "@/hooks/useDocumentFilters";
 
 export function useGroupSpace() {
-  // --------------------------------------------------------------------------
   // 1. ROUTING & NAVIGATION
-  // --------------------------------------------------------------------------
   const { id } = useParams<{ id: string }>();
   const groupId = Number(id);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get("tab") as GroupTab) || "documents";
 
-  // --------------------------------------------------------------------------
   // 2. GLOBAL STORES & QUERY CLIENT
-  // --------------------------------------------------------------------------
   const queryClient = useQueryClient();
   const currentUser = useAuthStore((state) => state.user);
 
-  // --------------------------------------------------------------------------
   // 3. LOCAL STATES & FILTERS
-  // --------------------------------------------------------------------------
+  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null); // BỔ SUNG STATE SELECTED FOLDER
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [selectedFileType, setSelectedFileType] = useState<string | null>(null);
@@ -61,20 +56,24 @@ export function useGroupSpace() {
   const [isDeleteFolderOpen, setIsDeleteFolderOpen] = useState(false);
   const [isDeletingFolder, setIsDeletingFolder] = useState(false);
 
-  // Quản lý Đổi tên tài liệu nhóm (Sử dụng chung RenameDocumentModal)
+  // Quản lý Đổi tên tài liệu nhóm
   const [isGroupRenameModalOpen, setIsGroupRenameModalOpen] = useState(false);
   const [renamingGroupDoc, setRenamingGroupDoc] = useState<{
     id: string | number;
     title: string;
   } | null>(null);
 
-  // --------------------------------------------------------------------------
-  // 4. QUERIES (FETCHING DATA - Phần phụ thuộc dữ liệu cơ bản)
-  // --------------------------------------------------------------------------
+  // 4. QUERIES
   const { data: workspaceTags = [] } = useQuery({
     queryKey: ["workspace-tags", groupId],
     queryFn: () => groupTagService.getWorkspaceTags(Number(groupId)),
     enabled: !!groupId,
+    select: (data) =>
+      data.map((item: any) => ({
+        id: item.tag_id ?? item.tag?.id ?? item.id,
+        name: item.tag?.name ?? item.name,
+        color: item.tag?.color ?? item.color ?? "#e5e7eb",
+      })),
   });
 
   const { data: fileTypes = [] } = useQuery({
@@ -121,9 +120,7 @@ export function useGroupSpace() {
     queryFn: groupService.getMyInvitations,
   });
 
-  // --------------------------------------------------------------------------
-  // 5. DERIVED DATA & PERMISSIONS (Được đưa lên trước Trash Query để xác định isOwner)
-  // --------------------------------------------------------------------------
+  // 5. DERIVED DATA & PERMISSIONS
   const documents = documentsData?.items ?? [];
   const folders = foldersData;
   const members = membersData;
@@ -137,9 +134,7 @@ export function useGroupSpace() {
   const permission: PermissionLevel = currentMember?.permission_level ?? "view";
   const canManageDocuments = isOwner || permission === "full";
 
-  // --------------------------------------------------------------------------
-  // 6. TRASH QUERY (Đặt ở đây vì đã có biến isOwner được khai báo ở trên)
-  // --------------------------------------------------------------------------
+  // 6. TRASH QUERY
   const { data: trashData = [] } = useQuery({
     queryKey: ["group-trash", groupId],
     queryFn: () => groupService.getTrash(groupId),
@@ -148,86 +143,135 @@ export function useGroupSpace() {
 
   const trash = trashData;
 
-  // Lọc tài liệu tổng hợp theo Search, Tag, FileType, Tab
-  const filteredDocuments = (documents || []).filter((doc: any) => {
-    const docName = doc.title || doc.name || "";
+  // TOGGLE FUNCTION CHỌN / BỎ CHỌN THƯ MỤC
+  const handleSelectFolder = (id: number | null) => {
+    setSelectedFolderId((prevId) => (prevId === id ? null : id));
+  };
+
+  // TỰ ĐỘNG BỎ LỌC NẾU THƯ MỤC ĐANG CHỌN BỊ XÓA
+  useEffect(() => {
     if (
-      searchQuery &&
-      !docName.toLowerCase().includes(searchQuery.toLowerCase())
+      selectedFolderId !== null &&
+      folders &&
+      !folders.some((f: any) => f.id === selectedFolderId)
     ) {
-      return false;
+      setSelectedFolderId(null);
     }
+  }, [folders, selectedFolderId]);
 
-    if (selectedTagId !== null) {
-      const hasTag = doc.tags?.some(
-        (t: any) => t.id === selectedTagId || t.tag_id === selectedTagId,
-      );
-      if (!hasTag) return false;
-    }
+ // LỌC TÀI LIỆU CLIENT-SIDE
+  const filteredDocuments = useMemo(() => {
+    let list = documents || [];
 
-    if (selectedFileType !== null) {
-      const fileType = doc.file_type || doc.rawType;
-      if (fileType !== selectedFileType) return false;
-    }
+    // A. Lọc theo Folder được chọn
+    if (selectedFolderId !== null) {
+      const activeFolder = folders.find((f: any) => f.id === selectedFolderId);
+      const folderTagIds =
+        activeFolder?.tags?.map((t: any) => t.id ?? t.tag_id) ||
+        (activeFolder as any)?.tag_ids ||
+        [];
 
-    if (activeDocumentTab !== "all") {
-      const fileType = (doc.file_type || doc.rawType || "").toLowerCase();
-      const ext = (doc.extension || "").toLowerCase();
-
-      if (activeDocumentTab === "pdf") {
-        if (!fileType.includes("pdf") && ext !== "pdf") return false;
-      } else if (activeDocumentTab === "image") {
-        if (
-          !fileType.startsWith("image/") &&
-          !["jpg", "jpeg", "png", "webp", "svg"].includes(ext)
-        )
-          return false;
-      } else if (activeDocumentTab === "document") {
-        const isDoc =
-          fileType.includes("word") ||
-          fileType.includes("presentation") ||
-          fileType.includes("spreadsheet") ||
-          ["doc", "docx", "ppt", "pptx", "xls", "xlsx", "txt"].includes(ext);
-        if (!isDoc) return false;
-      } else if (activeDocumentTab === "other") {
-        const isKnown =
-          fileType.includes("pdf") ||
-          fileType.startsWith("image/") ||
-          fileType.includes("word") ||
-          fileType.includes("presentation") ||
-          fileType.includes("spreadsheet") ||
-          [
-            "pdf",
-            "jpg",
-            "jpeg",
-            "png",
-            "webp",
-            "doc",
-            "docx",
-            "ppt",
-            "pptx",
-            "xls",
-            "xlsx",
-          ].includes(ext);
-        if (isKnown) return false;
+      if (folderTagIds.length > 0) {
+        // Trường hợp 1: Thư mục chứa Tag -> Lọc tài liệu theo Tag tương ứng
+        list = list.filter((doc: any) =>
+          doc.tags?.some((docTag: any) =>
+            folderTagIds.includes(docTag.id ?? docTag.tag_id)
+          )
+        );
+      } else {
+        // Trường hợp 2: Lọc tài liệu liên kết trực tiếp qua ID thư mục
+        list = list.filter((doc: any) => {
+          const docFolderId = doc.folder_id ?? doc.folderId ?? doc.folder?.id;
+          return Number(docFolderId) === Number(selectedFolderId);
+        });
       }
     }
 
-    return true;
-  });
+    // B. Lọc tiếp theo các thuộc tính Search, TagDropdown, FileType, Tab
+    return list.filter((doc: any) => {
+      const docName = doc.title || doc.name || "";
+      if (
+        searchQuery &&
+        !docName.toLowerCase().includes(searchQuery.toLowerCase())
+      ) {
+        return false;
+      }
 
-  // --------------------------------------------------------------------------
+      if (selectedTagId !== null) {
+        const hasTag = doc.tags?.some(
+          (t: any) => t.id === selectedTagId || t.tag_id === selectedTagId,
+        );
+        if (!hasTag) return false;
+      }
+
+      if (selectedFileType !== null) {
+        const fileType = doc.file_type || doc.rawType;
+        if (fileType !== selectedFileType) return false;
+      }
+
+      if (activeDocumentTab !== "all") {
+        const fileType = (doc.file_type || doc.rawType || "").toLowerCase();
+        const ext = (doc.extension || "").toLowerCase();
+
+        if (activeDocumentTab === "pdf") {
+          if (!fileType.includes("pdf") && ext !== "pdf") return false;
+        } else if (activeDocumentTab === "image") {
+          if (
+            !fileType.startsWith("image/") &&
+            !["jpg", "jpeg", "png", "webp", "svg"].includes(ext)
+          )
+            return false;
+        } else if (activeDocumentTab === "document") {
+          const isDoc =
+            fileType.includes("word") ||
+            fileType.includes("presentation") ||
+            fileType.includes("spreadsheet") ||
+            ["doc", "docx", "ppt", "pptx", "xls", "xlsx", "txt"].includes(ext);
+          if (!isDoc) return false;
+        } else if (activeDocumentTab === "other") {
+          const isKnown =
+            fileType.includes("pdf") ||
+            fileType.startsWith("image/") ||
+            fileType.includes("word") ||
+            fileType.includes("presentation") ||
+            fileType.includes("spreadsheet") ||
+            [
+              "pdf",
+              "jpg",
+              "jpeg",
+              "png",
+              "webp",
+              "doc",
+              "docx",
+              "ppt",
+              "pptx",
+              "xls",
+              "xlsx",
+            ].includes(ext);
+          if (isKnown) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [
+    documents,
+    folders,
+    selectedFolderId,
+    searchQuery,
+    selectedTagId,
+    selectedFileType,
+    activeDocumentTab,
+  ]);
+
   // 7. EFFECTS & NAVIGATION GUARDS
-  // --------------------------------------------------------------------------
   useEffect(() => {
     if (!id || isNaN(groupId)) {
       navigate("/groups", { replace: true });
     }
   }, [id, groupId, navigate]);
 
-  // --------------------------------------------------------------------------
-  // 8. MUTATIONS (ACTIONS: SAVE, DELETE, RENAME)
-  // --------------------------------------------------------------------------
+  // 8. MUTATIONS
   const documentMutationOptions = {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["group-documents", groupId] });
@@ -254,9 +298,6 @@ export function useGroupSpace() {
       setIsGroupRenameModalOpen(false);
       setRenamingGroupDoc(null);
     },
-    onError: (error) => {
-      console.error("Lỗi khi đổi tên tài liệu nhóm:", error);
-    },
   });
 
   const uploadMutation = useMutation({
@@ -275,9 +316,7 @@ export function useGroupSpace() {
     },
   });
 
-  // --------------------------------------------------------------------------
-  // 9. EVENT HANDLERS (FOLDERS & DOCUMENTS)
-  // --------------------------------------------------------------------------
+  // 9. EVENT HANDLERS
   const setTab = (tab: GroupTab) =>
     setSearchParams(tab === "documents" ? {} : { tab });
 
@@ -321,6 +360,10 @@ export function useGroupSpace() {
 
     try {
       setIsDeletingFolder(true);
+      // RESET TRẠNG THÁI LỌC NẾU XÓA ĐÚNG THƯ MỤC ĐANG CHỌN
+      if (deletingFolder.id === selectedFolderId) {
+        setSelectedFolderId(null);
+      }
       await groupFolderService.delete(deletingFolder.id, groupId);
 
       queryClient.invalidateQueries({
@@ -344,14 +387,100 @@ export function useGroupSpace() {
     setIsGroupRenameModalOpen(true);
   };
 
-  // --------------------------------------------------------------------------
-  // 10. RETURN VALUES (EXPOSED TO GROUP SPACE COMPONENT)
-  // --------------------------------------------------------------------------
+  const saveFolderMutation = useMutation({
+    mutationFn: async (data: { id?: number; name: string; color: string; tagIds: number[] }) => {
+      let folderId = data.id;
+
+      if (folderId) {
+        await groupFolderService.update(folderId, { name: data.name, color: data.color } as any, groupId);
+      } else {
+        const newFolder = await groupFolderService.create({ name: data.name, color: data.color }, groupId);
+        folderId = newFolder.id;
+      }
+
+      if (folderId && data.tagIds) {
+        await groupFolderService.addTags(folderId, data.tagIds, groupId);
+      }
+
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["group-folders", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["group", groupId] }); 
+      setIsFolderModalOpen(false);
+      setEditingFolder(null);
+    },
+  });
+
+  const handleFolderSubmit = async (data: {
+    id?: number;
+    name: string;
+    color: string;
+    tagIds: number[];
+  }) => {
+    await saveFolderMutation.mutateAsync(data);
+  };
+
+  const handleCreateGroupTag = async (name: string) => {
+    try {
+      const res: any = await groupTagService.create(
+        { name, color: "#e5e7eb" },
+        groupId,
+      );
+      
+      queryClient.invalidateQueries({ queryKey: ["workspace-tags", groupId] });
+
+      const realTagId = res.tag_id ?? res.tag?.id ?? res.id;
+      const realTagName = res.tag?.name ?? res.name;
+
+      return { id: realTagId, name: realTagName };
+    } catch (error) {
+      console.error("Lỗi tạo tag nhóm:", error);
+      throw error;
+    }
+  };
+
+  const createFolderMutation = useMutation({
+    mutationFn: async (data: { name: string; color?: string; tagIds?: number[] }) => {
+      return groupFolderService.create(
+        {
+          name: data.name,
+          color: data.color,
+          tag_ids: data.tagIds,
+        },
+        groupId
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["group-folders", groupId] });
+    },
+  });
+
+  const updateFolderMutation = useMutation({
+    mutationFn: async (data: { id: number; name: string; color?: string; tagIds?: number[] }) => {
+      return groupFolderService.update(
+        data.id,
+        { 
+          name: data.name, 
+          color: data.color, 
+          tag_ids: data.tagIds 
+        },
+        groupId
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["group-folders", groupId] });
+    },
+  });
+
   return {
     groupId,
     navigate,
     activeTab,
     queryClient,
+    selectedFolderId, // EXPOSE STATE
+    setSelectedFolderId,
+    handleSelectFolder, // EXPOSE TOGGLE FUNCTION
     searchQuery,
     setSearchQuery,
     selectedTagId,
@@ -401,7 +530,12 @@ export function useGroupSpace() {
     setRenamingGroupDoc,
     renameGroupDocumentMutation,
     handleRenameDocument,
-    uploadMutation,  
-    createTagMutation, 
+    uploadMutation,
+    createTagMutation,
+    handleFolderSubmit,
+    handleCreateGroupTag,
+    isSubmittingFolder: saveFolderMutation.isPending,
+    createFolderMutation,
+    updateFolderMutation,
   };
 }

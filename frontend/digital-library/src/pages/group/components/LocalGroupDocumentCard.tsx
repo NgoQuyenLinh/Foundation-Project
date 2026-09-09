@@ -18,29 +18,41 @@ export default function LocalGroupDocumentCard({
 }: LocalGroupDocumentCardProps) {
   const navigate = useNavigate();
 
-  const handleAction = async (action: string) => {
+  // Hàm chuyển hướng đến trang chi tiết tài liệu nhóm
+  const handleViewDetail = () => {
+    navigate(`/groups/${groupId}/documents/${document.id}`);
+  };
+
+  const handleAction = (action: string) => {
     switch (action) {
       case "view":
-        navigate(`/groups/${groupId}/documents/${document.id}`);
+        handleViewDetail();
         break;
-      case "download":
-        console.log("Download", document.id);
+      case "download": {
+        // Tự động tạo thẻ <a> để tải file
+        const downloadUrl = `${import.meta.env.VITE_API_URL || "http://localhost:8000"}/groups/${groupId}/documents/${document.id}/download`;
+        const link = window.document.createElement("a");
+        link.href = downloadUrl;
+        link.download = document.title;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        window.document.body.appendChild(link);
+        link.click();
+        window.document.body.removeChild(link);
         break;
-      case "save-to-personal":
-        await onSave?.(document.id);
+      }
+      case "save_personal":
+      case "save":
+        onSave?.(document.id);
         break;
       case "rename":
         onRename?.(document.id, document.title);
         break;
       case "delete":
-        if (
-          window.confirm("Bạn có chắc chắn muốn xóa tài liệu này khỏi nhóm?")
-        ) {
-          await onDelete?.(document.id);
-        }
+        onDelete?.(document.id);
         break;
       default:
-        console.log("Action not handled in LocalGroupDocumentCard:", action);
+        break;
     }
   };
 
@@ -50,7 +62,7 @@ export default function LocalGroupDocumentCard({
     <Card className="group relative flex flex-col p-0 transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md">
       <div 
         className="flex h-[130px] w-full items-center justify-center overflow-hidden rounded-t-xl bg-gray-50 cursor-pointer"
-        onClick={() => navigate(`/groups/${groupId}/documents/${document.id}`)}
+        onClick={handleViewDetail}
       >
         <FileIcon
           type={document.file_type}
@@ -61,7 +73,7 @@ export default function LocalGroupDocumentCard({
       <div className="flex flex-1 items-start justify-between gap-2 px-3 py-3">
         <div 
           className="min-w-0 flex-1 cursor-pointer"
-          onClick={() => navigate(`/groups/${groupId}/documents/${document.id}`)}
+          onClick={handleViewDetail}
         >
           <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-gray-900" title={document.title}>
             {document.title}

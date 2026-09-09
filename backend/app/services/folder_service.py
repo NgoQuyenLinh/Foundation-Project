@@ -1,3 +1,4 @@
+# backend/app/services/folder_service.py
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
@@ -49,43 +50,51 @@ async def get_folders_with_stats(
     owner_id: int,
     workspace_id: Optional[int] = None,
 ) -> List[dict]:
-    """Lấy danh sách folder kèm tag_count và document_count"""
-    workspace_filter = "f.workspace_id = :workspace_id" if workspace_id is not None else "f.workspace_id IS NULL"
-    document_workspace_filter = (
-        "d.workspace_id = :workspace_id"
-        if workspace_id is not None
-        else "d.workspace_id IS NULL AND d.owner_id = :owner_id"
-    )
-    sql = text("""
+    """Lấy danh sách folder kèm tag_count, document_count và danh sách tags"""
+
+    # 1. Tách biệt điều kiện lọc giữa Personal Space và Group Space
+    if workspace_id is not None:
+        folder_where_clause = "f.workspace_id = :workspace_id"
+        doc_where_clause = "d.workspace_id = :workspace_id"
+    else:
+        folder_where_clause = "f.owner_id = :owner_id AND f.workspace_id IS NULL"
+        doc_where_clause = "d.workspace_id IS NULL AND d.owner_id = :owner_id"
+
+    # 2. Truy vấn đếm document thông qua trung gian document_tags (dt)
+    sql = text(f"""
         SELECT
             f.id, f.owner_id, f.workspace_id, f.name, f.color, f.created_at,
             COUNT(DISTINCT ft.tag_id) AS tag_count,
-            COUNT(DISTINCT dt.document_id) AS document_count
+            COUNT(DISTINCT d.id) AS document_count
         FROM folders f
         LEFT JOIN folder_tags ft ON ft.folder_id = f.id
         LEFT JOIN document_tags dt ON dt.tag_id = ft.tag_id
         LEFT JOIN documents d ON d.id = dt.document_id
-            AND """ + document_workspace_filter + """
+            AND {doc_where_clause}
             AND d.is_deleted = false
-        WHERE f.owner_id = :owner_id
-            AND """ + workspace_filter + """
+        WHERE {folder_where_clause}
         GROUP BY f.id, f.owner_id, f.workspace_id, f.name, f.color, f.created_at
         ORDER BY f.created_at ASC
     """)
+
     result = await db.execute(sql, {"owner_id": owner_id, "workspace_id": workspace_id})
     rows = result.mappings().all()
 
     folders_out = []
     for row in rows:
+        # 3. Query lấy danh sách Tag objects
         tags_result = await db.execute(
             select(Tag)
             .join(FolderTag, FolderTag.tag_id == Tag.id)
             .where(FolderTag.folder_id == row["id"])
         )
         tags = tags_result.scalars().all()
-        folders_out.append({**dict(row), "tags": tags})
-    return folders_out
 
+        folder_dict = dict(row)
+        folder_dict["tags"] = tags
+        folders_out.append(folder_dict)
+
+    return folders_out
 from sqlalchemy import select, func
 from app.models.document import Document
 from app.models.document_tag import document_tags

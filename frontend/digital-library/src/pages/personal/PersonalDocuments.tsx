@@ -1,4 +1,5 @@
 // src/pages/personal/PersonalDocuments.tsx
+import { useEffect } from "react"; // 1. Bổ sung import useEffect
 import { Search, Upload } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -71,7 +72,18 @@ export function PersonalDocuments() {
     selectedFileType,
     setSelectedFileType,
     filteredDocuments: filteredDocCards,
-  } = usePersonalDocuments(selectedFolderId);
+  } = usePersonalDocuments(selectedFolderId, folders);
+
+  // 2. TỰ ĐỘNG BỎ LỌC NẾU THƯ MỤC ĐANG CHỌN BỊ XÓA KHỎI DANH SÁCH
+  useEffect(() => {
+    if (
+      selectedFolderId !== null &&
+      folders &&
+      !folders.some((f) => f.id === selectedFolderId)
+    ) {
+      setSelectedFolderId(null);
+    }
+  }, [folders, selectedFolderId, setSelectedFolderId]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -119,8 +131,9 @@ export function PersonalDocuments() {
         folders={folders}
         foldersLoading={foldersLoading}
         selectedFolderId={selectedFolderId}
+        /* 3. TỐI ƯU TOGGLE CHỌN / BỎ CHỌN THƯ MỤC */
         onSelectFolder={(id) => {
-          setSelectedFolderId(id);
+          setSelectedFolderId((prevId) => (prevId === id ? null : id));
           setPage(1);
         }}
         onFolderAction={handleFolderAction}
@@ -144,39 +157,38 @@ export function PersonalDocuments() {
       />
 
       {/* --- CÁC MODALS --- */}
-     <PersonalFolderModalContainer
-  isOpen={isModalOpen}
-  editingFolder={editingFolder}
-  tags={tags}
-  isSubmitting={
-    createFolderMutation.isPending || updateFolderMutation.isPending
-  }
-  onClose={() => {
-    setIsModalOpen(false);
-    setEditingFolder(null);
-  }}
-  onCreateTag={(name) => createTagMutation.mutateAsync(name)}
-  onSubmitData={async (data) => {
-    if (data.id) {
-      await updateFolderMutation.mutateAsync({
-        id: data.id,
-        name: data.name,
-        color: data.color,
-        tagIds: data.tagIds,
-        initialTagIds: (editingFolder?.tagIds || []).map(Number),
-      });
-    } else {
-      await createFolderMutation.mutateAsync({
-        name: data.name,
-        color: data.color,
-        tagIds: data.tagIds,
-      });
-    }
-    // Đóng modal sau khi tạo/sửa xong thành công
-    setIsModalOpen(false);
-    setEditingFolder(null);
-  }}
-/>
+      <PersonalFolderModalContainer
+        isOpen={isModalOpen}
+        editingFolder={editingFolder}
+        tags={tags}
+        isSubmitting={
+          createFolderMutation.isPending || updateFolderMutation.isPending
+        }
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingFolder(null);
+        }}
+        onCreateTag={(name) => createTagMutation.mutateAsync(name)}
+        onSubmitData={async (data) => {
+          if (data.id) {
+            await updateFolderMutation.mutateAsync({
+              id: data.id,
+              name: data.name,
+              color: data.color,
+              tagIds: data.tagIds,
+              initialTagIds: (editingFolder?.tagIds || []).map(Number),
+            });
+          } else {
+            await createFolderMutation.mutateAsync({
+              name: data.name,
+              color: data.color,
+              tagIds: data.tagIds,
+            });
+          }
+          setIsModalOpen(false);
+          setEditingFolder(null);
+        }}
+      />
 
       <RenameDocumentModal
         isOpen={isRenameModalOpen && !!renamingDoc}
@@ -210,9 +222,15 @@ export function PersonalDocuments() {
             setIsDeleteFolderOpen(false);
             setDeletingFolderId(null);
           }}
-          onConfirm={() =>
-            deletingFolderId && deleteFolderMutation.mutate(deletingFolderId)
-          }
+          /* 4. RESET BỎ LỌC NGAY KHI XÁC NHẬN XÓA THƯ MỤC ĐANG CHỌN */
+          onConfirm={() => {
+            if (deletingFolderId) {
+              if (deletingFolderId === selectedFolderId) {
+                setSelectedFolderId(null);
+              }
+              deleteFolderMutation.mutate(deletingFolderId);
+            }
+          }}
         />
       )}
     </div>

@@ -683,30 +683,31 @@ async def list_group_folders(
 @router.post("/groups/{group_id}/folders/", response_model=FolderOut, status_code=status.HTTP_201_CREATED)
 async def create_group_folder(
     group_id: int,
-    payload: FolderCreate,
+    folder_in: FolderCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Kiểm tra quyền ghi (hàm bạn vừa thêm thành công)
     await require_write_permission(db, group_id, current_user.id)
 
-    # Khởi tạo Folder (Sử dụng owner_id thay vì user_id)
     new_folder = Folder(
-        name=payload.name,
-        color=payload.color or "#2196F3",
+        name=folder_in.name,
+        color=folder_in.color or "#2196F3",
+        owner_id=current_user.id,
         workspace_id=group_id,
-        owner_id=current_user.id,  # <--- SỬA TẠI ĐÂY (đổi user_id -> owner_id)
     )
-    
+
+    # Gán trực tiếp qua relationship folder_tags (không bị vướng viewonly)
+    if folder_in.tag_ids:
+        new_folder.folder_tags = [FolderTag(tag_id=tid) for tid in folder_in.tag_ids]
+
     db.add(new_folder)
     await db.commit()
-    await db.refresh(new_folder)
 
-    # Lấy dữ liệu trả về theo đúng định dạng
     folders = await get_folders_with_stats(db, current_user.id, group_id)
     created_folder = next((f for f in folders if f["id"] == new_folder.id), None)
 
     return created_folder or new_folder
+
 
 @router.post("/groups/", response_model=WorkspaceOut, status_code=status.HTTP_201_CREATED)
 async def create_group(
@@ -812,9 +813,14 @@ async def update_group_folder(
         folder.name = payload.name
     if payload.color is not None: 
         folder.color = payload.color
+
+    if payload.tag_ids is not None:
+        await db.execute(delete(FolderTag).where(FolderTag.folder_id == folder_id))
+        
+        for tid in payload.tag_ids:
+            db.add(FolderTag(folder_id=folder_id, tag_id=tid))
         
     await db.commit()
-    await db.refresh(folder)
     
     folders = await get_folders_with_stats(db, current_user.id, group_id)
     return next((f for f in folders if f["id"] == folder_id), folder)

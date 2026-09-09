@@ -1,7 +1,7 @@
 // frontend/digital-library/src/pages/group/components/DocumentsTab.tsx
 
 import { useQuery } from "@tanstack/react-query";
-import { FileBox } from "lucide-react";
+import { FileBox, ArrowLeft } from "lucide-react";
 import EmptyState from "@/components/shared/EmptyState";
 import { FolderCard } from "@/components/shared/FolderCard";
 import { type FolderAction } from "@/components/shared/FolderContextMenu";
@@ -16,18 +16,21 @@ import { getFileExtension } from "@/utils/file";
 export default function DocumentsTab({
   documents,
   folders,
+  selectedFolderId = null,
+  onSelectFolder,
   isLoading,
   permission,
   isOwner,
   groupId,
   onSave,
   onDelete,
-  onRename, // <-- Bổ sung destructure onRename
+  onRename,  
   onAddFolder,
   onFolderAction,
 }: DocumentsTabProps) {
+
   const docCards = documents.map((doc) => ({
-    id: doc.id.toString(), // Chuyển sang string cho khớp với DocumentCardProps
+    id: doc.id.toString(),
     name: doc.title,
     type: doc.file_type || "unknown",
     updatedAt: formatRelativeDate(doc.created_at), 
@@ -36,6 +39,8 @@ export default function DocumentsTab({
     thumbnail_path: doc.thumbnail_path || null,
     file_path: doc.file_path || null,             
     tags: doc.tags || [],                         
+    // Ép kiểu bắt nhiều định dạng trả về từ Backend
+    folder_id: (doc as any).folder_id ?? (doc as any).folderId ?? (doc as any).folder?.id ?? null,
     _original: doc,
   }));
 
@@ -46,9 +51,7 @@ export default function DocumentsTab({
   });
 
   const getFolderTags = (folder: any) => {
-    if (Array.isArray(folder.tags) && folder.tags.length > 0) {
-      return folder.tags;
-    }
+    if (Array.isArray(folder.tags) && folder.tags.length > 0) return folder.tags;
     if (Array.isArray(folder.tag_ids) && folder.tag_ids.length > 0) {
       return workspaceTags.filter((t: any) => folder.tag_ids.includes(t.id));
     }
@@ -57,23 +60,23 @@ export default function DocumentsTab({
 
   const { filteredDocuments: filteredCards } = useDocumentFilters(docCards);
 
+  // 'documents' truyền vào từ Props đã được lọc chuẩn xác ở useGroupSpace
+  // do đó chỉ cần hiển thị trực tiếp filteredCards mà không filter lại theo card.folder_id nữa
+  const displayedCards = filteredCards;
+
+  const currentFolder = folders.find((f) => f.id === selectedFolderId);
+
   if (isLoading) {
     return (
       <div className="space-y-5">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-20 animate-pulse rounded-xl bg-gray-200"
-            />
+            <div key={i} className="h-20 animate-pulse rounded-xl bg-gray-200" />
           ))}
         </div>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
           {Array.from({ length: 10 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-40 animate-pulse rounded-xl bg-gray-200"
-            />
+            <div key={i} className="h-40 animate-pulse rounded-xl bg-gray-200" />
           ))}
         </div>
       </div>
@@ -88,25 +91,36 @@ export default function DocumentsTab({
 
   return (
     <div className="space-y-5">
+      {/* 1. SECTION THƯ MỤC HỌC TẬP */}
       <section>
         <h2 className="mb-3 text-sm font-semibold text-gray-700">
           Thư mục học tập
         </h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {folders.map((folder) => (
-            <FolderCard
-              key={folder.id}
-              id={folder.id}
-              name={folder.name}
-              count={folder.document_count}
-              color={folder.color}
-              tags={getFolderTags(folder)}
-              onClick={() => console.log(folder.id)}
-              onAction={(action) =>
-                onFolderAction(action as FolderAction, folder.id)
-              }
-            />
-          ))}
+          {folders.map((folder) => {
+            const isSelected = selectedFolderId === folder.id;
+
+            return (
+              <div
+                key={folder.id}
+                className={`transition-all rounded-xl ${
+                  isSelected ? "ring-2 ring-primary-500 ring-offset-2" : ""
+                }`}
+              >
+                <FolderCard
+                  id={folder.id}
+                  name={folder.name}
+                  count={folder.document_count}
+                  color={folder.color}
+                  tags={getFolderTags(folder)}
+                  onClick={() => onSelectFolder?.(folder.id)}
+                  onAction={(action) =>
+                    onFolderAction(action as FolderAction, folder.id)
+                  }
+                />
+              </div>
+            );
+          })}
           {effectivePermission !== "view" && (
             <button
               onClick={onAddFolder}
@@ -118,13 +132,26 @@ export default function DocumentsTab({
         </div>
       </section>
 
+      {/* 2. SECTION TÀI LIỆU */}
       <section>
-        <h2 className="mb-3 text-sm font-semibold text-gray-700">
-          Tài liệu mới nhất
-        </h2>
-        {filteredCards.length ? (
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700">
+            {currentFolder ? `Tài liệu trong "${currentFolder.name}"` : "Tài liệu mới nhất"}
+          </h2>
+          
+          {selectedFolderId !== null && (
+            <button
+              onClick={() => onSelectFolder?.(null)}
+              className="flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:underline"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Tất cả tài liệu
+            </button>
+          )}
+        </div>
+
+        {displayedCards.length ? (
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {filteredCards.map((card) => (
+            {displayedCards.map((card) => (
               <LocalGroupDocumentCard
                 key={card.id}
                 document={card._original}
@@ -139,8 +166,12 @@ export default function DocumentsTab({
         ) : (
           <EmptyState
             icon={<FileBox className="h-6 w-6" />}
-            title="Chưa có tài liệu nào"
-            description="Chia sẻ hoặc upload tài liệu để nhóm cùng sử dụng."
+            title={selectedFolderId ? "Thư mục trống" : "Chưa có tài liệu nào"}
+            description={
+              selectedFolderId
+                ? "Thư mục này hiện chưa chứa tài liệu nào."
+                : "Chia sẻ hoặc upload tài liệu để nhóm cùng sử dụng."
+            }
           />
         )}
       </section>

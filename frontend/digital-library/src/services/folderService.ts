@@ -44,6 +44,7 @@ export const folderService = {
     data: {
       name?: string;
       color?: string;
+      tag_ids?: number[];
     },
     groupId?: number | string
   ) => {
