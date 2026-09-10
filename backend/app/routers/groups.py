@@ -695,6 +695,63 @@ async def list_sent_invitations(
     )
     return [_invitation_out(invitation) for invitation in result.scalars().all()]
 
+@router.post("/groups/{group_id}/invitations/preview-count")
+async def preview_invite_count(
+    group_id: int,
+    payload: BulkInviteCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await require_owner(db, group_id, current_user.id)
+
+    conditions = []
+    if payload.identifiers:
+        conditions.append(
+            or_(
+                User.username.in_(payload.identifiers),
+                User.email.in_(payload.identifiers),
+                User.student_code.in_(payload.identifiers)
+            )
+        )
+    if payload.class_ids:
+        conditions.append(User.class_id.in_(payload.class_ids))
+    if payload.faculty_ids:
+        conditions.append(User.faculty_id.in_(payload.faculty_ids))
+    if payload.student_code_patterns:
+        pattern_conditions = [User.student_code.ilike(f"%{pat}%") for pat in payload.student_code_patterns]
+        conditions.append(or_(*pattern_conditions))
+
+    if not conditions:
+        return {"count": 0}
+
+    # Lấy danh sách ID phù hợp
+    target_users = await db.execute(select(User.id).where(or_(*conditions)))
+    target_user_ids = [uid for uid in target_users.scalars().all() if uid != current_user.id]
+
+    if not target_user_ids:
+        return {"count": 0}
+
+    # Loại bỏ thành viên đã có trong nhóm
+    existing_members = await db.execute(
+        select(WorkspaceMember.user_id).where(
+            WorkspaceMember.workspace_id == group_id,
+            WorkspaceMember.user_id.in_(target_user_ids)
+        )
+    )
+    existing_member_ids = set(existing_members.scalars().all())
+
+    # Loại bỏ người đã được mời (đang chờ)
+    existing_invites = await db.execute(
+        select(WorkspaceInvitation.invited_user_id).where(
+            WorkspaceInvitation.workspace_id == group_id,
+            WorkspaceInvitation.invited_user_id.in_(target_user_ids),
+            WorkspaceInvitation.status == "pending"
+        )
+    )
+    existing_invite_ids = set(existing_invites.scalars().all())
+
+    valid_user_ids = set(target_user_ids) - existing_member_ids - existing_invite_ids
+    return {"count": len(valid_user_ids)}
 
 @router.delete("/groups/{group_id}/invitations/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def cancel_invitation(

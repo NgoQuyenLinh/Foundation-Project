@@ -122,5 +122,7 @@ export const groupService = {
     // Sửa '/workspaces/' thành '/groups/' để lấy trực tiếp bảng Tag
     const response = await api.get(`/groups/${groupId}/tags/`);
     return response.data;
-  }
+  },
+  previewInviteCount: (groupId: number, payload: BulkInvitePayload) =>
+    api.post<{ count: number }>(`/groups/${groupId}/invitations/preview-count`, payload).then((r) => r.data),
 };

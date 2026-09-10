@@ -86,6 +86,32 @@ export default function InviteModal({ groupId, onClose }: InviteModalProps) {
     },
   });
 
+  // 1. Tạo payload để đếm số lượng
+  const bulkPayload = useMemo(
+    () => ({
+      identifiers: selectedUsers.map((u) => u.email || u.username),
+      class_ids: selectedClassIds,
+      faculty_ids: selectedFacultyIds,
+      student_code_patterns: patterns,
+      message: "",
+    }),
+    [selectedUsers, selectedClassIds, selectedFacultyIds, patterns],
+  );
+
+  // Debounce payload 300ms để tránh spam API khi chọn liên tục
+  const debouncedBulkPayload = useDebounce(bulkPayload, 300);
+
+  // 2. Query xem trước số lượng user nhận lời mời
+  const { data: previewData, isFetching: isPreviewLoading } = useQuery({
+    queryKey: ["invite-preview-count", groupId, debouncedBulkPayload],
+    queryFn: () =>
+      groupService.previewInviteCount(Number(groupId), debouncedBulkPayload), 
+    enabled: totalCriteriaCount > 0,
+    staleTime: 1000 * 30,
+  });
+
+  const targetUserCount = previewData?.count ?? 0;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4 backdrop-blur-sm">
       <Card className="w-full max-w-2xl overflow-visible my-6 flex flex-col max-h-[90vh]">
@@ -186,7 +212,11 @@ export default function InviteModal({ groupId, onClose }: InviteModalProps) {
           <span className="text-xs font-medium text-gray-500">
             Đã chọn tổng cộng{" "}
             <strong className="text-primary-600">{totalCriteriaCount}</strong>{" "}
-            điều kiện
+            điều kiện với tổng số{" "}
+            <strong className="text-primary-600">
+              {isPreviewLoading ? "..." : targetUserCount}
+            </strong>{" "}
+            lời mời
           </span>
           <div className="flex items-center gap-3">
             <Button
@@ -198,10 +228,16 @@ export default function InviteModal({ groupId, onClose }: InviteModalProps) {
               Hủy bỏ
             </Button>
             <Button
-              disabled={totalCriteriaCount === 0 || inviteMutation.isPending}
+              disabled={
+                totalCriteriaCount === 0 ||
+                inviteMutation.isPending ||
+                isPreviewLoading
+              }
               onClick={() => inviteMutation.mutate()}
             >
-              {inviteMutation.isPending ? "Đang gửi..." : "Gửi lời mời"}
+              {inviteMutation.isPending
+                ? "Đang gửi..."
+                : "Gửi lời mời hàng loạt"}
             </Button>
           </div>
         </div>
@@ -273,51 +309,57 @@ function BasicInviteForm({
     const matchedFaculties = faculties.filter(
       (f: any) =>
         f.name.toLowerCase().includes(term) ||
-        f.code.toLowerCase().includes(term)
+        f.code.toLowerCase().includes(term),
     );
     results.push(
       ...matchedFaculties
         .filter((f) => !selectedFacultyIds.includes(f.id))
-        .map((f: any): SelectedItem => ({
-          id: `faculty-${f.id}`,
-          type: "faculty",
-          label: f.name,
-          subLabel: `Khoa • ${f.code}`,
-          value: f.id,
-        }))
+        .map(
+          (f: any): SelectedItem => ({
+            id: `faculty-${f.id}`,
+            type: "faculty",
+            label: f.name,
+            subLabel: `Khoa • ${f.code}`,
+            value: f.id,
+          }),
+        ),
     );
 
     // 3. Lọc Lớp
     const matchedClasses = classes.filter(
       (c: any) =>
         c.name.toLowerCase().includes(term) ||
-        c.code.toLowerCase().includes(term)
+        c.code.toLowerCase().includes(term),
     );
     results.push(
       ...matchedClasses
         .filter((c) => !selectedClassIds.includes(c.id))
-        .map((c: any): SelectedItem => ({
-          id: `class-${c.id}`,
-          type: "class",
-          label: c.name,
-          subLabel: `Lớp • ${c.code}`,
-          value: c.id,
-        }))
+        .map(
+          (c: any): SelectedItem => ({
+            id: `class-${c.id}`,
+            type: "class",
+            label: c.name,
+            subLabel: `Lớp • ${c.code}`,
+            value: c.id,
+          }),
+        ),
     );
 
     // 4. User từ API
     results.push(
       ...userSuggestions
         .filter((u: User) => !selectedUsers.some((sel) => sel.id === u.id))
-        .map((u: any): SelectedItem => ({
-          id: `user-${u.id}`,
-          type: "user",
-          label: u.full_name || u.username,
-          subLabel: u.student_code
-            ? `${u.student_code} • ${u.email}`
-            : u.email,
-          value: u,
-        }))
+        .map(
+          (u: any): SelectedItem => ({
+            id: `user-${u.id}`,
+            type: "user",
+            label: u.full_name || u.username,
+            subLabel: u.student_code
+              ? `${u.student_code} • ${u.email}`
+              : u.email,
+            value: u,
+          }),
+        ),
     );
 
     return results;
@@ -349,8 +391,10 @@ function BasicInviteForm({
   const handleSelectItem = (item: SelectedItem) => {
     if (item.type === "user") setSelectedUsers((prev) => [...prev, item.value]);
     if (item.type === "pattern") setPatterns((prev) => [...prev, item.value]);
-    if (item.type === "class") setSelectedClassIds((prev) => [...prev, item.value]);
-    if (item.type === "faculty") setSelectedFacultyIds((prev) => [...prev, item.value]);
+    if (item.type === "class")
+      setSelectedClassIds((prev) => [...prev, item.value]);
+    if (item.type === "faculty")
+      setSelectedFacultyIds((prev) => [...prev, item.value]);
 
     setInputValue("");
     setShowDropdown(false);
@@ -535,26 +579,38 @@ function AdvancedInviteForm({
   });
 
   const availableUserSuggestions = userSuggestions.filter(
-    (sug: User) => !selectedUsers.some((u) => u.id === sug.id)
+    (sug: User) => !selectedUsers.some((u) => u.id === sug.id),
   );
 
   const filteredClasses = classes.filter(
     (c: any) =>
       c.name.toLowerCase().includes(classSearch.toLowerCase()) ||
-      c.code.toLowerCase().includes(classSearch.toLowerCase())
+      c.code.toLowerCase().includes(classSearch.toLowerCase()),
   );
 
   const filteredFaculties = faculties.filter(
     (f: any) =>
       f.name.toLowerCase().includes(facultySearch.toLowerCase()) ||
-      f.code.toLowerCase().includes(facultySearch.toLowerCase())
+      f.code.toLowerCase().includes(facultySearch.toLowerCase()),
   );
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (userDropdownRef.current && !userDropdownRef.current.contains(e.target as Node)) setShowUserDropdown(false);
-      if (classDropdownRef.current && !classDropdownRef.current.contains(e.target as Node)) setShowClassDropdown(false);
-      if (facultyDropdownRef.current && !facultyDropdownRef.current.contains(e.target as Node)) setShowFacultyDropdown(false);
+      if (
+        userDropdownRef.current &&
+        !userDropdownRef.current.contains(e.target as Node)
+      )
+        setShowUserDropdown(false);
+      if (
+        classDropdownRef.current &&
+        !classDropdownRef.current.contains(e.target as Node)
+      )
+        setShowClassDropdown(false);
+      if (
+        facultyDropdownRef.current &&
+        !facultyDropdownRef.current.contains(e.target as Node)
+      )
+        setShowFacultyDropdown(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -623,7 +679,9 @@ function AdvancedInviteForm({
           {showUserDropdown && debouncedUserTerm.trim() !== "" && (
             <div className="absolute top-full left-0 z-50 mt-1 w-full rounded-xl border border-gray-100 bg-white shadow-xl overflow-hidden">
               {isUserFetching ? (
-                <div className="p-3 text-center text-xs text-gray-500">Đang tìm kiếm...</div>
+                <div className="p-3 text-center text-xs text-gray-500">
+                  Đang tìm kiếm...
+                </div>
               ) : availableUserSuggestions.length > 0 ? (
                 <ul className="max-h-48 overflow-y-auto py-1">
                   {availableUserSuggestions.map((user: User) => (
@@ -720,7 +778,9 @@ function AdvancedInviteForm({
           >
             <Users className="h-4 w-4 text-gray-400 shrink-0 ml-1" />
             {selectedClassIds.length === 0 ? (
-              <span className="text-gray-400 text-sm">Nhấp để chọn lớp học...</span>
+              <span className="text-gray-400 text-sm">
+                Nhấp để chọn lớp học...
+              </span>
             ) : (
               selectedClassIds.map((id) => {
                 const cls = classes.find((c: any) => c.id === id);
@@ -764,20 +824,33 @@ function AdvancedInviteForm({
                         key={cls.id}
                         onClick={() =>
                           setSelectedClassIds((prev) =>
-                            isSelected ? prev.filter((id) => id !== cls.id) : [...prev, cls.id]
+                            isSelected
+                              ? prev.filter((id) => id !== cls.id)
+                              : [...prev, cls.id],
                           )
                         }
                         className={`flex cursor-pointer items-center justify-between px-3 py-2 rounded-md text-sm transition-colors ${
-                          isSelected ? "bg-primary-50 text-primary-700 font-medium" : "hover:bg-gray-50 text-gray-700"
+                          isSelected
+                            ? "bg-primary-50 text-primary-700 font-medium"
+                            : "hover:bg-gray-50 text-gray-700"
                         }`}
                       >
-                        <span>{cls.name} <span className="text-xs text-gray-400">({cls.code})</span></span>
-                        {isSelected && <Check className="h-4 w-4 text-primary-600" />}
+                        <span>
+                          {cls.name}{" "}
+                          <span className="text-xs text-gray-400">
+                            ({cls.code})
+                          </span>
+                        </span>
+                        {isSelected && (
+                          <Check className="h-4 w-4 text-primary-600" />
+                        )}
                       </li>
                     );
                   })
                 ) : (
-                  <li className="p-2 text-center text-xs text-gray-400">Không tìm thấy lớp học.</li>
+                  <li className="p-2 text-center text-xs text-gray-400">
+                    Không tìm thấy lớp học.
+                  </li>
                 )}
               </ul>
             </div>
@@ -797,7 +870,9 @@ function AdvancedInviteForm({
           >
             <GraduationCap className="h-4 w-4 text-gray-400 shrink-0 ml-1" />
             {selectedFacultyIds.length === 0 ? (
-              <span className="text-gray-400 text-sm">Nhấp để chọn khoa...</span>
+              <span className="text-gray-400 text-sm">
+                Nhấp để chọn khoa...
+              </span>
             ) : (
               selectedFacultyIds.map((id) => {
                 const fac = faculties.find((f: any) => f.id === id);
@@ -841,20 +916,33 @@ function AdvancedInviteForm({
                         key={fac.id}
                         onClick={() =>
                           setSelectedFacultyIds((prev) =>
-                            isSelected ? prev.filter((id) => id !== fac.id) : [...prev, fac.id]
+                            isSelected
+                              ? prev.filter((id) => id !== fac.id)
+                              : [...prev, fac.id],
                           )
                         }
                         className={`flex cursor-pointer items-center justify-between px-3 py-2 rounded-md text-sm transition-colors ${
-                          isSelected ? "bg-primary-50 text-primary-700 font-medium" : "hover:bg-gray-50 text-gray-700"
+                          isSelected
+                            ? "bg-primary-50 text-primary-700 font-medium"
+                            : "hover:bg-gray-50 text-gray-700"
                         }`}
                       >
-                        <span>{fac.name} <span className="text-xs text-gray-400">({fac.code})</span></span>
-                        {isSelected && <Check className="h-4 w-4 text-primary-600" />}
+                        <span>
+                          {fac.name}{" "}
+                          <span className="text-xs text-gray-400">
+                            ({fac.code})
+                          </span>
+                        </span>
+                        {isSelected && (
+                          <Check className="h-4 w-4 text-primary-600" />
+                        )}
                       </li>
                     );
                   })
                 ) : (
-                  <li className="p-2 text-center text-xs text-gray-400">Không tìm thấy khoa.</li>
+                  <li className="p-2 text-center text-xs text-gray-400">
+                    Không tìm thấy khoa.
+                  </li>
                 )}
               </ul>
             </div>
