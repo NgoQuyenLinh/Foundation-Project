@@ -1,7 +1,7 @@
 # backend/app/schemas/group.py
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -89,3 +89,14 @@ class ShareFolderPayload(BaseModel):
 
 class ShareResult(BaseModel):
     shared_count: int
+    
+class BulkInviteCreate(BaseModel):
+    identifiers: List[str] = []           # Chứa email, username, mssv cụ thể
+    class_ids: List[int] = []             # Chứa ID của các lớp
+    faculty_ids: List[int] = []           # Chứa ID của các khoa
+    student_code_patterns: List[str] = [] # Chứa các chuỗi mã sinh viên (vd: '241')
+    message: Optional[str] = ""
+
+class BulkInviteOut(BaseModel):
+    message: str
+    invited_count: int

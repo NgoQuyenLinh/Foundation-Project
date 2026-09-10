@@ -2,7 +2,7 @@ import { type ElementType } from "react";
 import { Globe, Sun, ShieldCheck, Clock, Share2, Database, ChevronDown } from "lucide-react";
 import heroImage from "@/assets/hero.png";
 
-const logoUrl = "/favicon.svg";
+const logoUrl = "/logo.png";
 
 function FeatureItem({ icon: Icon, title, desc }: { icon: ElementType; title: string; desc: string }) {
   return (

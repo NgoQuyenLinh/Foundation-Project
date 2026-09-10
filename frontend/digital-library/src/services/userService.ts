@@ -17,4 +17,6 @@ export const userService = {
     const response = await api.patch("/users/me/password", data);
     return response.data;
     },
+    searchUsers: (query: string) => 
+    api.get<User[]>(`/users/search?q=${encodeURIComponent(query)}`).then((r) => r.data),
 }

@@ -24,6 +24,8 @@ from app.routers.documents import _process_document_background
 from app.schemas.document import DocumentOut, DocumentUpdate, PaginatedDocuments
 from app.schemas.folder import AddTagsToFolder, FolderCreate, FolderOut, FolderUpdate
 from app.schemas.group import (
+    BulkInviteCreate,
+    BulkInviteOut,
     GroupCreate,
     GroupListItem,
     GroupUpdate,
@@ -579,6 +581,104 @@ async def invite_member(
     )
     return _invitation_out(result.scalar_one())
 
+@router.post("/groups/{group_id}/invitations/", response_model=BulkInviteOut, status_code=status.HTTP_201_CREATED)
+async def invite_members_bulk(
+    group_id: int,
+    payload: BulkInviteCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    workspace = await require_owner(db, group_id, current_user.id)
+
+    conditions = []
+    
+    # 1. Mời cá nhân (theo username, email, MSSV)
+    if payload.identifiers:
+        conditions.append(
+            or_(
+                User.username.in_(payload.identifiers),
+                User.email.in_(payload.identifiers),
+                User.student_code.in_(payload.identifiers)
+            )
+        )
+    # 2. Mời theo Lớp
+    if payload.class_ids:
+        conditions.append(User.class_id.in_(payload.class_ids))
+    
+    # 3. Mời theo Khoa
+    if payload.faculty_ids:
+        conditions.append(User.faculty_id.in_(payload.faculty_ids))
+        
+    # 4. Mời theo Pattern mã Sinh Viên (vd: '241')
+    if payload.student_code_patterns:
+        pattern_conditions = [User.student_code.ilike(f"%{pat}%") for pat in payload.student_code_patterns]
+        conditions.append(or_(*pattern_conditions))
+
+    if not conditions:
+        raise HTTPException(400, "Vui lòng chọn ít nhất một tiêu chí mời")
+
+    # Lấy toàn bộ User hợp lệ
+    target_users = await db.execute(select(User.id).where(or_(*conditions)))
+    target_user_ids = [uid for uid in target_users.scalars().all() if uid != current_user.id]
+
+    if not target_user_ids:
+        return BulkInviteOut(message="Không tìm thấy người dùng nào phù hợp", invited_count=0)
+
+    # Lọc những người ĐÃ LÀ THÀNH VIÊN
+    existing_members = await db.execute(
+        select(WorkspaceMember.user_id).where(
+            WorkspaceMember.workspace_id == group_id,
+            WorkspaceMember.user_id.in_(target_user_ids)
+        )
+    )
+    existing_member_ids = set(existing_members.scalars().all())
+
+    # Lọc những người ĐÃ ĐƯỢC MỜI (đang chờ)
+    existing_invites = await db.execute(
+        select(WorkspaceInvitation.invited_user_id).where(
+            WorkspaceInvitation.workspace_id == group_id,
+            WorkspaceInvitation.invited_user_id.in_(target_user_ids),
+            WorkspaceInvitation.status == "pending"
+        )
+    )
+    existing_invite_ids = set(existing_invites.scalars().all())
+
+    # Chốt danh sách cuối cùng cần mời
+    valid_user_ids = set(target_user_ids) - existing_member_ids - existing_invite_ids
+
+    if not valid_user_ids:
+        return BulkInviteOut(message="Tất cả người dùng được chọn đã có trong nhóm hoặc đã được mời", invited_count=0)
+
+    # Bulk Insert Lời mời
+    new_invitations = [
+        WorkspaceInvitation(
+            workspace_id=group_id,
+            invited_user_id=uid,
+            invited_by=current_user.id,
+            message=payload.message,
+            status="pending"
+        ) for uid in valid_user_ids
+    ]
+    db.add_all(new_invitations)
+
+    # Bulk Insert Thông báo
+    new_notifications = [
+        Notification(
+            user_id=uid,
+            type="group_invitation",
+            workspace_id=group_id,
+            document_id=None,
+            message=f"Bạn được mời tham gia nhóm {workspace.name}."
+        ) for uid in valid_user_ids
+    ]
+    db.add_all(new_notifications)
+
+    await db.commit()
+
+    return BulkInviteOut(
+        message=f"Đã gửi lời mời thành công tới {len(valid_user_ids)} người", 
+        invited_count=len(valid_user_ids)
+    )
 
 @router.get("/groups/{group_id}/invitations/", response_model=list[InvitationOut])
 async def list_sent_invitations(

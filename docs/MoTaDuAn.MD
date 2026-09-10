@@ -179,3 +179,15 @@ Mô tả chi tiết ứng dụng (Word Online): Có link mẫu https://1drv.ms/w
 
 Thiết kế Cơ sở dữ liệu: Link tới docs/DB_Elibrary (nhấn vào sẽ truy cập)
 Mô tả CSDL  https://1drv.ms/w/c/d80506e30d5701be/IQDa2nuSIXpZTYc5X88FdNBWAVcvKOzbCqEVtWNbUt6iReA?e=3FOChA
+
+
+
+## SỬ DỤNG TÍNH NĂNG TÌM KIẾM MẠNH CỦA POSTGRESQL
+-- 1. Bật tính năng Trigram của PostgreSQL
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- 2. Đánh GIN Index cho các cột thường xuyên tìm kiếm
+CREATE INDEX idx_users_username_trgm ON users USING GIN (username gin_trgm_ops);
+CREATE INDEX idx_users_email_trgm ON users USING GIN (email gin_trgm_ops);
+CREATE INDEX idx_users_student_code_trgm ON users USING GIN (student_code gin_trgm_ops);
+CREATE INDEX idx_users_full_name_trgm ON users USING GIN (full_name gin_trgm_ops);

@@ -96,6 +96,4 @@ class User(Base, TimestampMixin):
     )
     deleted_trash_batches: Mapped[List["TrashBatch"]] = relationship(
     "TrashBatch", foreign_keys="[TrashBatch.deleted_by]", back_populates="deleter"
-    
-    
 )

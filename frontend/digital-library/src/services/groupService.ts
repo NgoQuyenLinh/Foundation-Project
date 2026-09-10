@@ -10,6 +10,14 @@ import type {
   WorkspaceMember,
 } from "@/types/group";
 
+export interface BulkInvitePayload {
+  identifiers: string[];
+  class_ids: number[];
+  faculty_ids: number[];
+  student_code_patterns: string[];
+  message: string;
+}
+
 export const groupService = {
   getAll: () => api.get<GroupListItem[]>("/groups/").then((r) => r.data),
 
@@ -61,6 +69,9 @@ export const groupService = {
   leave: (groupId: number) => api.post(`/groups/${groupId}/leave`),
 
   invite: (groupId: number, payload: { identifier: string; message?: string }) =>
+    api.post(`/groups/${groupId}/invitations/`, payload).then((r) => r.data),
+
+  inviteBulk: (groupId: number, payload: BulkInvitePayload) =>
     api.post(`/groups/${groupId}/invitations/`, payload).then((r) => r.data),
 
   getInvitationsSent: (groupId: number) =>
