@@ -237,7 +237,7 @@ export default function InviteModal({ groupId, onClose }: InviteModalProps) {
             >
               {inviteMutation.isPending
                 ? "Đang gửi..."
-                : "Gửi lời mời hàng loạt"}
+                : "Gửi lời mời"}
             </Button>
           </div>
         </div>

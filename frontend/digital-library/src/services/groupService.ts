@@ -11,11 +11,12 @@ import type {
 } from "@/types/group";
 
 export interface BulkInvitePayload {
-  identifiers: string[];
-  class_ids: number[];
-  faculty_ids: number[];
-  student_code_patterns: string[];
-  message: string;
+  identifier?: string;
+  identifiers?: string[];
+  class_ids?: number[];
+  faculty_ids?: number[];
+  student_code_patterns?: string[];
+  message?: string;
 }
 
 export const groupService = {
@@ -68,11 +69,50 @@ export const groupService = {
 
   leave: (groupId: number) => api.post(`/groups/${groupId}/leave`),
 
+  // Mời 1 người
   invite: (groupId: number, payload: { identifier: string; message?: string }) =>
-    api.post(`/groups/${groupId}/invitations/`, payload).then((r) => r.data),
+    api.post(`/groups/${groupId}/invitations/`, {
+      identifier: payload.identifier,
+      class_ids: [],
+      faculty_ids: [],
+      student_code_patterns: [],
+      message: payload.message || "",
+    }).then((r) => r.data),
 
-  inviteBulk: (groupId: number, payload: BulkInvitePayload) =>
-    api.post(`/groups/${groupId}/invitations/`, payload).then((r) => r.data),
+  // Mời danh sách (Xử lý tách mảng identifiers thành từng request song song phù hợp với Backend)
+  inviteBulk: async (groupId: number, payload: BulkInvitePayload) => {
+    const targetIdentifiers: string[] = [];
+
+    if (payload.identifiers && payload.identifiers.length > 0) {
+      targetIdentifiers.push(...payload.identifiers);
+    }
+    if (payload.identifier && !targetIdentifiers.includes(payload.identifier)) {
+      targetIdentifiers.push(payload.identifier);
+    }
+
+    // Nếu có danh sách người nhận, tự động tách thành các request gửi song song
+    if (targetIdentifiers.length > 0) {
+      const requests = targetIdentifiers.map((id) =>
+        api.post(`/groups/${groupId}/invitations/`, {
+          identifier: id,
+          class_ids: payload.class_ids || [],
+          faculty_ids: payload.faculty_ids || [],
+          student_code_patterns: payload.student_code_patterns || [],
+          message: payload.message || "",
+        }).then((r) => r.data)
+      );
+      return Promise.all(requests);
+    }
+
+    // Trường hợp gửi theo lớp/khoa mà không truyền identifier cá nhân
+    return api.post(`/groups/${groupId}/invitations/`, {
+      identifier: "",
+      class_ids: payload.class_ids || [],
+      faculty_ids: payload.faculty_ids || [],
+      student_code_patterns: payload.student_code_patterns || [],
+      message: payload.message || "",
+    }).then((r) => r.data);
+  },
 
   getInvitationsSent: (groupId: number) =>
     api.get<WorkspaceInvitation[]>(`/groups/${groupId}/invitations/`).then((r) => r.data),
@@ -100,29 +140,25 @@ export const groupService = {
     api.post(`/groups/${groupId}/trash/${docId}/restore`),
 
   addTagsToGroup: (groupId: number, tagIds: number[]) =>
-    api.post(`/workspaces/${groupId}/tags/bulk`, { tag_ids: tagIds }).then(r => r.data),
+    api.post(`/workspaces/${groupId}/tags/bulk`, { tag_ids: tagIds }).then((r) => r.data),
 
-  // Lấy chi tiết 1 tài liệu trong nhóm
   getDocumentById: (groupId: number, docId: number) =>
     api.get<Document>(`/groups/${groupId}/documents/${docId}`).then((r) => r.data),
 
-  // Cập nhật thông tin/đổi tên tài liệu nhóm
   updateDocument: (groupId: number, docId: number, payload: { title: string }) =>
     api.patch<Document>(`/groups/${groupId}/documents/${docId}`, payload).then((r) => r.data),
 
-  // Cập nhật danh sách tags cho tài liệu nhóm
   updateTags: (groupId: number, docId: number, tagIds: number[]) =>
     api.patch<Document>(`/groups/${groupId}/documents/${docId}/tags`, { tag_ids: tagIds }).then((r) => r.data),
 
-  // Xóa 1 tag khỏi tài liệu nhóm
   removeTag: (groupId: number, docId: number, tagId: number) =>
     api.delete<Document>(`/groups/${groupId}/documents/${docId}/tags/${tagId}`).then((r) => r.data),
 
   async getWorkspaceTags(groupId: number | string): Promise<any[]> {
-    // Sửa '/workspaces/' thành '/groups/' để lấy trực tiếp bảng Tag
     const response = await api.get(`/groups/${groupId}/tags/`);
     return response.data;
   },
+
   previewInviteCount: (groupId: number, payload: BulkInvitePayload) =>
     api.post<{ count: number }>(`/groups/${groupId}/invitations/preview-count`, payload).then((r) => r.data),
 };

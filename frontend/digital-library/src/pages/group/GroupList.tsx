@@ -49,6 +49,12 @@ export default function GroupList() {
     retry: false,
   });
 
+  // Query lấy danh sách lời mời tham gia nhóm của user hiện tại
+  const { data: invitationsData = [] } = useQuery({
+    queryKey: ["my-invitations"],
+    queryFn: groupService.getMyInvitations,
+  });
+
   const { data: tagsData } = useQuery<Tag[]>({
     queryKey: ["tags"],
     queryFn: () => tagService.getAll(),
@@ -159,7 +165,16 @@ export default function GroupList() {
         </div>
       )}
 
-      {activeTab === "notifications" && <NotificationsTab />}
+      {/* Truyền invitations và callback vào NotificationsTab */}
+      {activeTab === "notifications" && (
+        <NotificationsTab
+          invitations={invitationsData}
+          onActionSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ["my-invitations"] });
+            queryClient.invalidateQueries({ queryKey: ["groups"] });
+          }}
+        />
+      )}
 
       {isCreateOpen && (
         <CreateGroupModal
