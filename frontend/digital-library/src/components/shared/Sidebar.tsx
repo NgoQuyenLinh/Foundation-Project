@@ -37,7 +37,7 @@ const SCOPE_ITEMS: SidebarItem[] = [
 ];
 
 const PERSONAL_ITEMS: SidebarItem[] = [
-  { icon: LayoutDashboard, label: "Dashboard", to: "/personal" },
+  { icon: LayoutDashboard, label: "Dashboard", to: "/personal/dashboard" },
   { icon: FileText, label: "Tài liệu", to: "/personal/documents" },
   { icon: Share2, label: "Đã chia sẻ với tôi", to: "/personal/shared" },
   { icon: Heart, label: "Yêu thích", to: "/personal/favorites" },

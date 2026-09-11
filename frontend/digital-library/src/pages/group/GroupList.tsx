@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Users, X, Check } from "lucide-react";
+import { Search, Users, X, Check, Bell, List, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/Input";
 import EmptyState from "@/components/shared/EmptyState";
 import { groupService } from "@/services/groupService";
 import { tagService } from "@/services/tagService";
+import { NotificationsTab } from "./components/NotificationsTab";
 import type { GroupListItem, PermissionLevel } from "@/types/group";
 import { cn } from "@/utils/cn";
 import { mockGroups } from "@/mocks/groups";
@@ -28,9 +29,17 @@ export interface CreateGroupSubmitData {
   tagIds: number[];
 }
 
+type TabKey = "groups" | "notifications";
+
+const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+  { key: "groups", label: "Danh sách nhóm", icon: <List className="h-4 w-4" /> },
+  { key: "notifications", label: "Thông báo", icon: <Bell className="h-4 w-4" /> },
+];
+
 export default function GroupList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<TabKey>("groups");
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
@@ -40,7 +49,6 @@ export default function GroupList() {
     retry: false,
   });
 
-  // Đảm bảo gọi hàm lấy tags đúng cách
   const { data: tagsData } = useQuery<Tag[]>({
     queryKey: ["tags"],
     queryFn: () => tagService.getAll(),
@@ -56,58 +64,103 @@ export default function GroupList() {
 
   const createMutation = useMutation({
     mutationFn: async (payload: CreateGroupSubmitData) => {
-      // Bước 1: Gọi API tạo nhóm mới
       const workspace = await groupService.create({
         name: payload.name,
         description: payload.description,
         default_member_permission: payload.default_member_permission,
       });
 
-      // Bước 2: Nếu người dùng có chọn thẻ, gọi tiếp API bulk để gắn thẻ
       if (payload.tagIds && payload.tagIds.length > 0) {
         await groupService.addTagsToGroup(workspace.id, payload.tagIds);
       }
 
-      // Trả về workspace để onSuccess xử lý điều hướng
       return workspace;
     },
     onSuccess: (workspace) => {
       queryClient.invalidateQueries({ queryKey: ["groups"] });
       setIsCreateOpen(false);
-      navigate(`/groups/${workspace.id}`); // Điều hướng vào trong nhóm vừa tạo
+      navigate(`/groups/${workspace.id}`);
     },
   });
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between gap-4">
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Nhóm của tôi</h1>
-        <Button onClick={() => setIsCreateOpen(true)}>+ Tạo nhóm</Button>
+        <Button
+          variant="primary"
+          icon={<Plus className="h-4 w-4" />}
+          onClick={() => setIsCreateOpen(true)}
+        >
+          + Tạo nhóm
+        </Button>
       </div>
-      <div className="max-w-md">
-        <Input icon={<Search className="h-4 w-4" />} placeholder="Tìm kiếm nhóm của bạn..." value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} />
+
+      <div className="flex gap-1 border-b border-gray-200">
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={cn(
+              "flex items-center gap-2 px-4 pb-3 text-sm font-medium transition-colors focus:outline-none",
+              activeTab === tab.key
+                ? "border-b-2 border-primary-600 text-primary-600"
+                : "text-gray-600 hover:text-gray-900"
+            )}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
       </div>
-      {isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, index) => (
-            <Card key={index} className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-gray-200 animate-pulse" />
-              <div className="flex-1 space-y-2">
-                <div className="h-4 w-48 rounded bg-gray-200 animate-pulse" />
-                <div className="h-3 w-64 rounded bg-gray-200 animate-pulse" />
-              </div>
-            </Card>
-          ))}
+
+      {activeTab === "groups" && (
+        <div className="flex flex-col gap-4">
+          <div className="max-w-md">
+            <Input
+              icon={<Search className="h-4 w-4" />}
+              placeholder="Tìm kiếm nhóm của bạn..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+          </div>
+
+          {isLoading ? (
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <Card key={index} className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-gray-200 animate-pulse" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-48 rounded bg-gray-200 animate-pulse" />
+                    <div className="h-3 w-64 rounded bg-gray-200 animate-pulse" />
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : filteredGroups.length > 0 ? (
+            <div className="space-y-3">
+              {filteredGroups.map((group) => (
+                <GroupListCard
+                  key={group.id}
+                  group={group}
+                  onEnter={() => navigate(`/groups/${group.id}`)}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              icon={<Users className="h-6 w-6" />}
+              title="Chưa có nhóm nào"
+              description="Tạo nhóm đầu tiên để chia sẻ tài liệu học tập với bạn bè hoặc giảng viên."
+              actionLabel="Tạo nhóm"
+              onAction={() => setIsCreateOpen(true)}
+            />
+          )}
         </div>
-      ) : filteredGroups.length > 0 ? (
-        <div className="space-y-3">
-          {filteredGroups.map((group) => (
-            <GroupListCard key={group.id} group={group} onEnter={() => navigate(`/groups/${group.id}`)} />
-          ))}
-        </div>
-      ) : (
-        <EmptyState icon={<Users className="h-6 w-6" />} title="Chưa có nhóm nào" description="Tạo nhóm đầu tiên để chia sẻ tài liệu học tập với bạn bè hoặc giảng viên." actionLabel="Tạo nhóm" onAction={() => setIsCreateOpen(true)} />
       )}
+
+      {activeTab === "notifications" && <NotificationsTab />}
+
       {isCreateOpen && (
         <CreateGroupModal
           isPending={createMutation.isPending}
@@ -134,12 +187,19 @@ function GroupListCard({ group, onEnter }: GroupListCardProps) {
       </div>
       <div className="min-w-0 flex-1">
         <h2 className="truncate text-base font-semibold text-gray-900">{group.name}</h2>
-        <p className="mt-1 text-xs text-gray-400">{group.member_count} thành viên · {formatRelativeDate(group.last_updated)}</p>
+        <p className="mt-1 text-xs text-gray-400">
+          {group.member_count} thành viên · {formatRelativeDate(group.last_updated)}
+        </p>
       </div>
-      <Badge variant={group.is_owner ? "primary" : group.my_permission === "full" ? "success" : "default"} className={cn(!group.is_owner && group.my_permission === "full" && "bg-blue-50 text-blue-600")}>
+      <Badge
+        variant={group.is_owner ? "primary" : group.my_permission === "full" ? "success" : "default"}
+        className={cn(!group.is_owner && group.my_permission === "full" && "bg-blue-50 text-blue-600")}
+      >
         {roleLabel}
       </Badge>
-      <Button variant="outline" onClick={onEnter}>Vào không gian</Button>
+      <Button variant="outline" onClick={onEnter}>
+        Vào không gian
+      </Button>
     </Card>
   );
 }
@@ -193,22 +253,30 @@ function CreateGroupModal({ isPending, onClose, onSubmit, availableTags = [] }: 
           </button>
         </div>
         <div className="overflow-y-auto custom-scrollbar p-5">
-          <form id="create-group-form" className="space-y-6" onSubmit={(event) => {
-            event.preventDefault();
-            onSubmit({
-              name,
-              description: description || undefined,
-              default_member_permission: permission,
-              tagIds: selectedTagIds,
-            });
-          }}>
+          <form
+            id="create-group-form"
+            className="space-y-6"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSubmit({
+                name,
+                description: description || undefined,
+                default_member_permission: permission,
+                tagIds: selectedTagIds,
+              });
+            }}
+          >
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Tên nhóm</label>
               <Input value={name} onChange={(event) => setName(event.target.value)} required />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Mô tả</label>
-              <textarea className="min-h-24 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-primary-600" value={description} onChange={(event) => setDescription(event.target.value)} />
+              <textarea
+                className="min-h-24 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-primary-600"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+              />
             </div>
 
             <div className="space-y-4">
@@ -280,8 +348,19 @@ function CreateGroupModal({ isPending, onClose, onSubmit, availableTags = [] }: 
                 { value: "full" as const, label: "Toàn quyền", desc: "Thành viên có thể upload, sửa và xóa tài liệu." },
                 { value: "view" as const, label: "Chỉ xem", desc: "Thành viên xem, tải và lưu tài liệu về cá nhân." },
               ].map((option) => (
-                <label key={option.value} className={cn("cursor-pointer rounded-xl border p-4 transition-colors", permission === option.value ? "border-primary-500 bg-primary-50" : "border-gray-200 bg-white hover:border-gray-300")}>
-                  <input className="sr-only" type="radio" checked={permission === option.value} onChange={() => setPermission(option.value)} />
+                <label
+                  key={option.value}
+                  className={cn(
+                    "cursor-pointer rounded-xl border p-4 transition-colors",
+                    permission === option.value ? "border-primary-500 bg-primary-50" : "border-gray-200 bg-white hover:border-gray-300"
+                  )}
+                >
+                  <input
+                    className="sr-only"
+                    type="radio"
+                    checked={permission === option.value}
+                    onChange={() => setPermission(option.value)}
+                  />
                   <span className="text-sm font-semibold text-gray-900">{option.label}</span>
                   <span className="mt-1 block text-xs text-gray-500">{option.desc}</span>
                 </label>
@@ -290,8 +369,12 @@ function CreateGroupModal({ isPending, onClose, onSubmit, availableTags = [] }: 
           </form>
         </div>
         <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-100 bg-white px-5 py-4">
-          <Button type="button" variant="outline" onClick={onClose}>Hủy bỏ</Button>
-          <Button type="submit" form="create-group-form" disabled={isPending || !name.trim()}>Tạo</Button>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Hủy bỏ
+          </Button>
+          <Button type="submit" form="create-group-form" disabled={isPending || !name.trim()}>
+            Tạo
+          </Button>
         </div>
       </Card>
     </div>

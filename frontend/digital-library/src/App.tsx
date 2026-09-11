@@ -19,6 +19,7 @@ import SettingsPage from "@/pages/settings/SettingsPage";
 import ProtectedRoute from "@/components/shared/ProtectedRoute";
 import { useRestoreSession } from "@/hooks/useRestoreSession";
 import GroupDocumentDetailPage from "@/pages/group/GroupDocumentDetailPage";
+import { PersonalHome } from "./pages/personal/PersonalHome";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,7 +54,9 @@ function AppRoutes() {
       {/* Protected routes — phải đăng nhập */}
       <Route element={<ProtectedRoute />}>
         <Route element={<MainLayout />}>
-          <Route path="/personal" element={<PersonalDashboard />} />
+          {/* Personal section */}
+          <Route path="/personal" element={<PersonalHome />} />
+          <Route path="/personal/dashboard" element={<PersonalDashboard />} />
           <Route path="/personal/documents" element={<PersonalDocuments />} />
           <Route path="/personal/documents/:id" element={<DocumentDetail />} />
           <Route path="/personal/shared" element={<SharedWithMe />} />

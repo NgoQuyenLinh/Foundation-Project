@@ -8,6 +8,14 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  // Cấu hình cho phép Tailscale host kết nối
+  server: {
+    host: true, // Lắng nghe trên mọi giao diện mạng (0.0.0.0)
+    allowedHosts: [
+      'macbook-pro-2.taile4a1e8.ts.net', // Thêm chính xác tên miền Tailscale của bạn
+      // Hoặc dùng true nếu muốn cho phép mọi host: allowedHosts: true
+    ],
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
