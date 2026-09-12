@@ -20,6 +20,8 @@ import ProtectedRoute from "@/components/shared/ProtectedRoute";
 import { useRestoreSession } from "@/hooks/useRestoreSession";
 import GroupDocumentDetailPage from "@/pages/group/GroupDocumentDetailPage";
 import { PersonalHome } from "./pages/personal/PersonalHome";
+import { SearchPage } from "./pages/search/SearchPage";
+
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -67,7 +69,7 @@ function AppRoutes() {
           <Route path="/class" element={<ClassSpace />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
-
+          <Route path="/search" element={<SearchPage />} />
           <Route
             path="/groups/:id/documents/:docId"
             element={<GroupDocumentDetailPage />}

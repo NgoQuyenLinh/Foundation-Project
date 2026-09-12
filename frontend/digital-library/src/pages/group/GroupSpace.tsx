@@ -36,6 +36,7 @@ import { RenameDocumentModal } from "@/components/shared/RenameDocumentModal";
 import { GroupUploadModal } from "./components/GroupUploadModal";
 import { GroupDocumentsSection } from "./components/GroupDocumentsSection";
 import { CreateFolderModal } from "@/components/shared/CreateFolderModal";
+import { useHighlightElement } from "@/hooks/useHighlightElement";
 
 export default function GroupSpace() {
   const {
@@ -130,6 +131,8 @@ export default function GroupSpace() {
       </div>
     );
   }
+
+  useHighlightElement("highlight_doc");
 
   return (
     <div className="flex flex-col gap-5">

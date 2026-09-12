@@ -82,7 +82,7 @@ export function DocumentCard({ document, onAction, basePath = "/personal/documen
   const tags = document.tags || [];
 
   return (
-    <div className="group relative flex min-h-[280px] flex-col cursor-pointer overflow-visible rounded-xl border border-gray-200 bg-white shadow-sm transition-all duration-200 hover:z-10 hover:-translate-y-0.5 hover:shadow-md focus-within:z-20">
+    <div id={`doc-${document.id}`} className="group relative flex min-h-[280px] flex-col cursor-pointer overflow-visible rounded-xl border border-gray-200 bg-white shadow-sm transition-all duration-200 hover:z-10 hover:-translate-y-0.5 hover:shadow-md focus-within:z-20">
       
       {/* Preview */}
       <div

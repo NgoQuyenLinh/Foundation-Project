@@ -21,6 +21,7 @@ import { PersonalDocumentsSection } from "./components/PersonalDocumentsSection"
 import { PersonalFolderModalContainer } from "./components/PersonalFolderModalContainer";
 import { PersonalUploadModal } from "./components/PersonalUploadModal";
 import { DeleteFolderConfirmModal } from "./components/DeleteFolderConfirmModal";
+import { useHighlightElement } from "@/hooks/useHighlightElement";
 
 export function PersonalDocuments() {
   // 1. Gọi Hook Folders
@@ -84,7 +85,7 @@ export function PersonalDocuments() {
       setSelectedFolderId(null);
     }
   }, [folders, selectedFolderId, setSelectedFolderId]);
-
+  useHighlightElement("highlight_doc");
   return (
     <div className="flex flex-col gap-6">
       {/* Filters Bar */}

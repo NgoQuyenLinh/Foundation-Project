@@ -59,7 +59,7 @@ export default function LocalGroupDocumentCard({
   const tags = document.tags || [];
 
   return (
-    <Card className="group relative flex flex-col p-0 transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md">
+    <Card id={`doc-${document.id}`} className="group relative flex flex-col p-0 transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-md">
       <div 
         className="flex h-[130px] w-full items-center justify-center overflow-hidden rounded-t-xl bg-gray-50 cursor-pointer"
         onClick={handleViewDetail}

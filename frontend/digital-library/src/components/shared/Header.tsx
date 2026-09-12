@@ -4,6 +4,7 @@ import { Search, Bell, Menu, LogOut } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { SearchBar } from "./SearchBar";
 
 export interface HeaderProps {
   scopeLabel: string;
@@ -51,21 +52,7 @@ export function Header({ scopeLabel, notificationCount = 0, onMenuClick }: Heade
 
       {/* Center: Search */}
       <div className="hidden flex-1 justify-center px-6 sm:flex">
-        <div className="relative w-full max-w-2xl">
-          <div className="absolute inset-y-0 left-0 flex items-center pl-3">
-            <Search className="h-4 w-4 text-gray-400" />
-          </div>
-          <input
-            type="text"
-            className="h-10 w-full rounded-lg border border-gray-200 bg-gray-50 pl-10 pr-16 text-sm outline-none placeholder:text-gray-500 focus:border-primary-500 focus:bg-white focus:ring-1 focus:ring-primary-500 transition-colors"
-            placeholder="Tìm kiếm tài liệu, tác giả, chuyên mục..."
-          />
-          <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-            <kbd className="inline-flex h-5 items-center gap-1 rounded border border-gray-200 bg-white px-1.5 font-mono text-[10px] font-medium text-gray-500">
-              Ctrl + K
-            </kbd>
-          </div>
-        </div>
+        <SearchBar />
       </div>
 
       {/* Right: Actions & User */}
