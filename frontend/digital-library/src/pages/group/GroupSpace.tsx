@@ -38,6 +38,8 @@ import { GroupDocumentsSection } from "./components/GroupDocumentsSection";
 import { CreateFolderModal } from "@/components/shared/CreateFolderModal";
 import { useHighlightElement } from "@/hooks/useHighlightElement";
 
+import GroupSwitcher from "./components/GroupSwitcher";
+
 export default function GroupSpace() {
   const {
     groupId,
@@ -98,9 +100,12 @@ export default function GroupSpace() {
     isSubmittingFolder,
     createFolderMutation,
     updateFolderMutation,
-    selectedFolderId,       
-    handleSelectFolder,    
+    selectedFolderId,
+    handleSelectFolder,
+    groups,
   } = useGroupSpace();
+
+  useHighlightElement("highlight_doc");
 
   if (workspaceLoading) {
     return (
@@ -132,24 +137,21 @@ export default function GroupSpace() {
     );
   }
 
-  useHighlightElement("highlight_doc");
-
   return (
     <div className="flex flex-col gap-5">
-      <Card className="flex flex-wrap items-center justify-between gap-4 p-5">
-        <div className="flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
-            <Users className="h-7 w-7" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">
-              {workspace.name}
-            </h1>
-            <p className="mt-1 text-xs text-gray-400">
-              {members.length} thành viên · Cập nhật gần đây
-            </p>
-          </div>
-        </div>
+      <Card className="relative flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5">
+        <GroupSwitcher
+          currentGroup={workspace}
+          currentGroupId={groupId}
+          groups={groups}
+          onSelectGroup={(nextGroupId) => {
+            navigate(`/groups/${nextGroupId}`);
+          }}
+          onViewAllGroups={() => {
+            navigate("/groups");
+          }}
+        />
+
         {canManageDocuments && (
           <Dropdown
             trigger={
@@ -208,8 +210,8 @@ export default function GroupSpace() {
       {/* TAB TÀI LIỆU */}
       {activeTab === "documents" && (
         <GroupDocumentsSection
-        selectedFolderId={selectedFolderId}     
-          onSelectFolder={handleSelectFolder}      
+          selectedFolderId={selectedFolderId}
+          onSelectFolder={handleSelectFolder}
           activeDocumentTab={activeDocumentTab}
           setActiveDocumentTab={setActiveDocumentTab}
           searchQuery={searchQuery}

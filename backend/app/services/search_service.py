@@ -30,8 +30,27 @@ class SearchService:
     async def quick_search(db: AsyncSession, query: str, user_id: int, limit: int = 5) -> list[SearchResultItem]:
         accessible_ws_ids = await SearchService._get_accessible_workspace_ids(db, user_id)
         search_pattern = f"%{query}%"
-        
-        # 1. Tìm Documents (Trigram ILIKE trên title)
+        results = []
+
+        # 1. TÌM KIẾM NHÓM (GROUPS) THEO TÊN
+        group_stmt = select(Workspace).where(
+            Workspace.type == "group",
+            Workspace.is_deleted == False,
+            Workspace.name.ilike(search_pattern),
+            Workspace.id.in_(accessible_ws_ids)
+        ).limit(limit)
+
+        group_results = await db.execute(group_stmt)
+        for group in group_results.scalars().all():
+            results.append(SearchResultItem(
+                id=group.id,
+                type="workspace",
+                title=group.name,
+                subtitle="Nhóm của tôi",
+                url=f"/groups?highlight_group={group.id}"  # Chuyển hướng về trang danh sách nhóm và truyền param highlight
+            ))
+
+        # 2. TÌM KIẾM TÀI LIỆU (DOCUMENTS)
         doc_stmt = select(Document).where(
             Document.title.ilike(search_pattern),
             Document.is_deleted == False,
@@ -42,12 +61,8 @@ class SearchService:
         ).limit(limit)
         
         doc_results = await db.execute(doc_stmt)
-        documents = doc_results.scalars().all()
-        
-        results = []
-        for doc in documents:
+        for doc in doc_results.scalars().all():
             if doc.workspace_id:
-                # Tài liệu nhóm
                 results.append(SearchResultItem(
                     id=doc.id,
                     type="group_doc",
@@ -56,7 +71,6 @@ class SearchService:
                     url=f"/groups/{doc.workspace_id}?tab=documents&highlight_doc={doc.id}"
                 ))
             else:
-                # Tài liệu cá nhân
                 results.append(SearchResultItem(
                     id=doc.id,
                     type="personal_doc",
@@ -64,9 +78,9 @@ class SearchService:
                     subtitle="Tài liệu cá nhân",
                     url=f"/personal/documents?highlight_doc={doc.id}"
                 ))
-                
-        return results
 
+        return results
+    
     @staticmethod
     async def full_text_search(db: AsyncSession, query: str, user_id: int, page: int = 1, page_size: int = 20):
         accessible_ws_ids = await SearchService._get_accessible_workspace_ids(db, user_id)

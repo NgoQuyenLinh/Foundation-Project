@@ -47,6 +47,9 @@ export function PersonalDocuments() {
     handleFolderAction,
   } = usePersonalFolders();
 
+    useHighlightElement("highlight_doc");
+
+
   // 2. Gọi Hook Documents (Truyền selectedFolderId vào)
   const {
     page,
@@ -85,7 +88,6 @@ export function PersonalDocuments() {
       setSelectedFolderId(null);
     }
   }, [folders, selectedFolderId, setSelectedFolderId]);
-  useHighlightElement("highlight_doc");
   return (
     <div className="flex flex-col gap-6">
       {/* Filters Bar */}

@@ -12,7 +12,7 @@ import {
   groupDocumentService,
 } from "@/services/documentService";
 import { useAuthStore } from "@/stores/authStore";
-import type { PermissionLevel } from "@/types/group";
+import type { GroupListItem, PermissionLevel } from "@/types/group";
 import type { GroupTab } from "../types/groupSpace.types";
 import type { TabKey } from "@/hooks/useDocumentFilters";
 
@@ -26,6 +26,11 @@ export function useGroupSpace() {
 
   // 2. GLOBAL STORES & QUERY CLIENT
   const queryClient = useQueryClient();
+  const { data: cachedGroups = [] } = useQuery<GroupListItem[]>({
+    queryKey: ["groups"],
+    queryFn: groupService.getAll,
+    enabled: false,
+  });
   const currentUser = useAuthStore((state) => state.user);
 
   // 3. LOCAL STATES & FILTERS
@@ -126,6 +131,8 @@ export function useGroupSpace() {
   const members = membersData;
   const invitations = invitationsData;
   const groupTags = groupTagsData;
+
+   const groups = cachedGroups;
 
   const currentMember = members.find((m) => m.user_id === currentUser?.id);
   const isOwner =
@@ -537,5 +544,6 @@ export function useGroupSpace() {
     isSubmittingFolder: saveFolderMutation.isPending,
     createFolderMutation,
     updateFolderMutation,
+    groups,
   };
 }
