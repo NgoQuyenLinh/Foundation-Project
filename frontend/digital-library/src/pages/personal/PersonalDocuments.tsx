@@ -1,19 +1,15 @@
 // src/pages/personal/PersonalDocuments.tsx
-import { useEffect } from "react"; // 1. Bổ sung import useEffect
-import { Search, Upload } from "lucide-react";
-import { Input } from "@/components/ui/Input";
-import { Button } from "@/components/ui/Button";
+import { useEffect } from "react"; 
 
 // Hooks
 import { usePersonalFolders } from "./hooks/usePersonalFolders";
 import { usePersonalDocuments } from "./hooks/usePersonalDocuments";
 
 // Components
-import { DynamicFilterDropdown } from "@/components/shared/DynamicFilterDropdown";
+import { DocumentFilterBar } from "@/components/shared/DocumentFilterBar"; // Bổ sung import này
 import { DocumentTypeTabs } from "@/components/shared/DocumentTypeTabs";
 import { RenameDocumentModal } from "@/components/shared/RenameDocumentModal";
 import { CardSkeleton } from "@/components/shared/CardSkeleton";
-import { getNormalizedExtension } from "@/hooks/useDocumentFilters";
 
 // Sub-sections & Modals
 import { PersonalFoldersSection } from "./components/PersonalFoldersSection";
@@ -47,8 +43,7 @@ export function PersonalDocuments() {
     handleFolderAction,
   } = usePersonalFolders();
 
-    useHighlightElement("highlight_doc");
-
+  useHighlightElement("highlight_doc");
 
   // 2. Gọi Hook Documents (Truyền selectedFolderId vào)
   const {
@@ -76,9 +71,10 @@ export function PersonalDocuments() {
     selectedFileType,
     setSelectedFileType,
     filteredDocuments: filteredDocCards,
+    filteredFolders,
   } = usePersonalDocuments(selectedFolderId, folders);
 
-  // 2. TỰ ĐỘNG BỎ LỌC NẾU THƯ MỤC ĐANG CHỌN BỊ XÓA KHỎI DANH SÁCH
+  // 3. TỰ ĐỘNG BỎ LỌC NẾU THƯ MỤC ĐANG CHỌN BỊ XÓA KHỎI DANH SÁCH
   useEffect(() => {
     if (
       selectedFolderId !== null &&
@@ -88,53 +84,29 @@ export function PersonalDocuments() {
       setSelectedFolderId(null);
     }
   }, [folders, selectedFolderId, setSelectedFolderId]);
+
   return (
     <div className="flex flex-col gap-6">
-      {/* Filters Bar */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="min-w-[240px] flex-1">
-          <Input
-            placeholder="Tìm tài liệu..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            icon={<Search className="h-4 w-4" />}
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <DynamicFilterDropdown
-            label="Nhãn dán"
-            options={tags.map((t) => ({ value: t.id, label: t.name }))}
-            selectedValue={selectedTagId}
-            onChange={(val) => setSelectedTagId(val as number | null)}
-          />
-          <DynamicFilterDropdown
-            label="Loại tài liệu"
-            options={fileTypes.map((ft: string) => ({
-              value: ft,
-              label: getNormalizedExtension(ft).toUpperCase() || "Khác",
-            }))}
-            selectedValue={selectedFileType}
-            onChange={(val) => setSelectedFileType(val as string | null)}
-          />
-        </div>
-        <div className="ml-auto">
-          <Button
-            variant="primary"
-            icon={<Upload className="h-4 w-4" />}
-            onClick={() => setIsUploadOpen(true)}
-          >
-            + Tải lên
-          </Button>
-        </div>
-      </div>
+      {/* 4. SỬ DỤNG COMPONENT FILTER BAR DÙNG CHUNG */}
+      <DocumentFilterBar
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        tags={tags}
+        selectedTagId={selectedTagId}
+        setSelectedTagId={setSelectedTagId}
+        fileTypes={fileTypes}
+        selectedFileType={selectedFileType}
+        setSelectedFileType={setSelectedFileType}
+        onUploadClick={() => setIsUploadOpen(true)}
+      />
 
       <DocumentTypeTabs activeTab={activeTab} onChangeTab={setActiveTab} />
 
       <PersonalFoldersSection
-        folders={folders}
+        folders={filteredFolders}
         foldersLoading={foldersLoading}
         selectedFolderId={selectedFolderId}
-        /* 3. TỐI ƯU TOGGLE CHỌN / BỎ CHỌN THƯ MỤC */
+        /* TỐI ƯU TOGGLE CHỌN / BỎ CHỌN THƯ MỤC */
         onSelectFolder={(id) => {
           setSelectedFolderId((prevId) => (prevId === id ? null : id));
           setPage(1);
@@ -225,7 +197,7 @@ export function PersonalDocuments() {
             setIsDeleteFolderOpen(false);
             setDeletingFolderId(null);
           }}
-          /* 4. RESET BỎ LỌC NGAY KHI XÁC NHẬN XÓA THƯ MỤC ĐANG CHỌN */
+          /* RESET BỎ LỌC NGAY KHI XÁC NHẬN XÓA THƯ MỤC ĐANG CHỌN */
           onConfirm={() => {
             if (deletingFolderId) {
               if (deletingFolderId === selectedFolderId) {

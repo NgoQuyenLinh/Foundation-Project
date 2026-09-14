@@ -113,7 +113,7 @@ export default function GroupList() {
           icon={<Plus className="h-4 w-4" />}
           onClick={() => setIsCreateOpen(true)}
         >
-          + Tạo nhóm
+          Tạo nhóm
         </Button>
       </div>
 

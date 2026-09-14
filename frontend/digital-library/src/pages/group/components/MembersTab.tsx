@@ -1,3 +1,5 @@
+// frontend/digital-library/src/pages/group/components/MembersTab.tsx
+
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Settings, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";

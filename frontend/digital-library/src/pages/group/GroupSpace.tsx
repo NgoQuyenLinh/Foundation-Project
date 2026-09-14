@@ -38,6 +38,9 @@ import { GroupDocumentsSection } from "./components/GroupDocumentsSection";
 import { CreateFolderModal } from "@/components/shared/CreateFolderModal";
 import { useHighlightElement } from "@/hooks/useHighlightElement";
 
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+
 import GroupSwitcher from "./components/GroupSwitcher";
 
 export default function GroupSpace() {
@@ -137,8 +140,19 @@ export default function GroupSpace() {
     );
   }
 
+
   return (
+    
     <div className="flex flex-col gap-5">
+      <div>
+      <button
+        onClick={() => navigate("/groups/")}
+        className="group inline-flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
+      >
+        <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+        Quay lại danh sách nhóm
+      </button>
+    </div>
       <Card className="relative flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5">
         <GroupSwitcher
           currentGroup={workspace}
