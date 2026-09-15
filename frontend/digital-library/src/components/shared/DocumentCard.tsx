@@ -1,14 +1,16 @@
 // src/components/shared/DocumentCard.tsx
 
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FileIcon, type FileTypeMap } from "@/components/shared/FileIcon";
 import {
   DocumentContextMenu,
   type DocumentAction,
+  type DocumentMenuItem,
 } from "@/components/shared/DocumentContextMenu";
 
 // ======================================================
-// Helpers
+// Helpers & File Type Themes
 // ======================================================
 
 const getFileExtension = (type: string) => {
@@ -26,11 +28,94 @@ const getFileExtension = (type: string) => {
     "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
     "image/jpeg": "jpg",
     "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
     "application/zip": "zip",
     "application/x-zip-compressed": "zip",
+    "application/x-rar-compressed": "rar",
   };
 
   return mimeMap[cleanType] || cleanType.split("/").pop() || cleanType;
+};
+
+// Cấu hình màu sắc dịu nhẹ (Pastel) theo từng nhóm định dạng file
+const FILE_TYPE_THEMES: Record<
+  string,
+  { bg: string; badgeBg: string; badgeText: string; border: string }
+> = {
+  pdf: {
+    bg: "bg-rose-50/70 hover:bg-rose-50",
+    badgeBg: "bg-rose-100/90",
+    badgeText: "text-rose-700",
+    border: "group-hover:border-rose-200",
+  },
+  doc: {
+    bg: "bg-blue-50/70 hover:bg-blue-50",
+    badgeBg: "bg-blue-100/90",
+    badgeText: "text-blue-700",
+    border: "group-hover:border-blue-200",
+  },
+  docx: {
+    bg: "bg-blue-50/70 hover:bg-blue-50",
+    badgeBg: "bg-blue-100/90",
+    badgeText: "text-blue-700",
+    border: "group-hover:border-blue-200",
+  },
+  xls: {
+    bg: "bg-emerald-50/70 hover:bg-emerald-50",
+    badgeBg: "bg-emerald-100/90",
+    badgeText: "text-emerald-700",
+    border: "group-hover:border-emerald-200",
+  },
+  xlsx: {
+    bg: "bg-emerald-50/70 hover:bg-emerald-50",
+    badgeBg: "bg-emerald-100/90",
+    badgeText: "text-emerald-700",
+    border: "group-hover:border-emerald-200",
+  },
+  ppt: {
+    bg: "bg-amber-50/70 hover:bg-amber-50",
+    badgeBg: "bg-amber-100/90",
+    badgeText: "text-amber-700",
+    border: "group-hover:border-amber-200",
+  },
+  pptx: {
+    bg: "bg-amber-50/70 hover:bg-amber-50",
+    badgeBg: "bg-amber-100/90",
+    badgeText: "text-amber-700",
+    border: "group-hover:border-amber-200",
+  },
+  jpg: {
+    bg: "bg-purple-50/70 hover:bg-purple-50",
+    badgeBg: "bg-purple-100/90",
+    badgeText: "text-purple-700",
+    border: "group-hover:border-purple-200",
+  },
+  png: {
+    bg: "bg-purple-50/70 hover:bg-purple-50",
+    badgeBg: "bg-purple-100/90",
+    badgeText: "text-purple-700",
+    border: "group-hover:border-purple-200",
+  },
+  zip: {
+    bg: "bg-slate-100/70 hover:bg-slate-100",
+    badgeBg: "bg-slate-200/90",
+    badgeText: "text-slate-700",
+    border: "group-hover:border-slate-300",
+  },
+  rar: {
+    bg: "bg-slate-100/70 hover:bg-slate-100",
+    badgeBg: "bg-slate-200/90",
+    badgeText: "text-slate-700",
+    border: "group-hover:border-slate-300",
+  },
+};
+
+const DEFAULT_THEME = {
+  bg: "bg-gray-50/70 hover:bg-gray-50",
+  badgeBg: "bg-gray-200/80",
+  badgeText: "text-gray-700",
+  border: "group-hover:border-gray-300",
 };
 
 // ======================================================
@@ -41,8 +126,6 @@ export interface DocumentTag {
   id: number;
   name: string;
 }
-
-import { type DocumentMenuItem } from "@/components/shared/DocumentContextMenu";
 
 export interface DocumentCardProps {
   document: {
@@ -65,8 +148,15 @@ export interface DocumentCardProps {
 // Component
 // ======================================================
 
-export function DocumentCard({ document, onAction, basePath = "/personal/documents", allowedActions, extraItems }: DocumentCardProps) {
+export function DocumentCard({
+  document,
+  onAction,
+  basePath = "/personal/documents",
+  allowedActions,
+  extraItems,
+}: DocumentCardProps) {
   const navigate = useNavigate();
+  const [imageError, setImageError] = useState(false);
 
   const handleAction = (action: DocumentAction | string, id: string) => {
     if (action === "view") navigate(`${basePath}/${id}`);
@@ -74,86 +164,104 @@ export function DocumentCard({ document, onAction, basePath = "/personal/documen
   };
 
   const ext = getFileExtension(document.extension || document.type);
-  const formattedExt = ext ? `.${ext}` : "";
-  const thumbnailUrl = document.thumbnail_path
-    ? `${import.meta.env.VITE_API_URL}/${document.thumbnail_path}`
-    : null;
-    
+  const theme = FILE_TYPE_THEMES[ext] || DEFAULT_THEME;
+
+  const thumbnailUrl =
+    document.thumbnail_path && !imageError
+      ? `${import.meta.env.VITE_API_URL}/${document.thumbnail_path}`
+      : null;
+
   const tags = document.tags || [];
 
   return (
-    <div id={`doc-${document.id}`} className="group relative flex min-h-[280px] flex-col cursor-pointer overflow-visible rounded-xl border border-gray-200 bg-white shadow-sm transition-all duration-200 hover:z-10 hover:-translate-y-0.5 hover:shadow-md focus-within:z-20">
-      
-      {/* Preview */}
+    <div
+      id={`doc-${document.id}`}
+      className={`group relative flex h-[280px] w-full flex-col overflow-hidden rounded-xl border border-gray-200/80 bg-white shadow-xs transition-all duration-200 hover:-translate-y-1 hover:shadow-md ${theme.border}`}
+    >
+      {/* 1. KHUNG PREVIEW TÀI LIỆU (Màu nền dịu nhẹ theo loại file) */}
       <div
-        className="relative h-[140px] w-full shrink-0 overflow-hidden rounded-t-xl bg-gray-50 flex items-center justify-center"
+        className={`relative h-[135px] w-full shrink-0 cursor-pointer overflow-hidden transition-colors ${theme.bg} flex items-center justify-center`}
         onClick={() => navigate(`${basePath}/${document.id}`)}
       >
-        {thumbnailUrl && (
+        {/* Badge định dạng ở góc trên bên trái */}
+        <div className="absolute left-2.5 top-2.5 z-10">
+          <span
+            className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide backdrop-blur-xs ${theme.badgeBg} ${theme.badgeText}`}
+          >
+            {ext || "FILE"}
+          </span>
+        </div>
+
+        {/* Thumbnail hoặc Icon đại diện */}
+        {thumbnailUrl ? (
           <img
             src={thumbnailUrl}
             alt={document.name}
-            className="h-full w-full object-cover"
-            onError={(e) => { e.currentTarget.style.display = "none"; }}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            onError={() => setImageError(true)}
           />
+        ) : (
+          <div className="flex items-center justify-center transition-transform duration-200 group-hover:scale-110">
+            <FileIcon type={document.type} className="h-14 w-14 drop-shadow-xs" />
+          </div>
         )}
-        <div className={thumbnailUrl ? "hidden" : ""}>
-          <FileIcon type={document.type} className="h-14 w-14" />
-        </div>
       </div>
 
-      {/* Information */}
-      <div className="relative flex min-h-[140px] flex-1 items-start justify-between gap-2 rounded-b-xl bg-white px-3 py-3">
-        <div
-          className="min-w-0 flex-1"
-          onClick={() => navigate(`${basePath}/${document.id}`)}
-        >
-          <h3
-            className="line-clamp-2 text-sm font-semibold leading-snug text-gray-900"
-            title={document.name}
-          >
-            <span>{document.name}</span>
-            {formattedExt && (
-              <span className="ml-1 shrink-0 font-mono text-xs font-normal text-gray-400">
-                ({formattedExt})
-              </span>
-            )}
-          </h3>
-
-          <p className="mt-1 text-xs leading-4 text-gray-400">
-            {document.size} • {document.updatedAt}
-          </p>
-
-          {/* Tags */}
-          {tags.length > 0 ? (
-            <div
-              className="mt-1 line-clamp-3 overflow-hidden text-xs italic leading-4 text-gray-400"
-              title={tags.map((tag) => `#${tag.name}`).join(" ")}
+      {/* 2. KHUNG THÔNG TIN TÀI LIỆU */}
+      <div className="relative flex flex-1 flex-col justify-between p-3.5">
+        <div>
+          {/* Tiêu đề & Menu thao tác */}
+          <div className="flex items-start justify-between gap-1.5">
+            <h3
+              onClick={() => navigate(`${basePath}/${document.id}`)}
+              className="line-clamp-2 flex-1 cursor-pointer text-sm font-semibold text-gray-800 transition-colors hover:text-primary-600 leading-snug"
+              title={document.name}
             >
-              {tags.map((tag, index) => (
-                <span key={tag.id}>
-                  #{tag.name}
-                  {index < tags.length - 1 && " "}
-                </span>
-              ))}
+              {document.name}
+            </h3>
+
+            {/* Context Menu (Hiển thị khi hover hoặc khi focus) */}
+            <div
+              className="shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <DocumentContextMenu
+                onAction={(action) => handleAction(action, document.id)}
+                allowedActions={allowedActions}
+                extraItems={extraItems}
+              />
             </div>
-          ) : (
-            <p className="mt-1 text-xs italic leading-4 text-gray-300">
-              Chưa có tag
-            </p>
-          )}
+          </div>
+
+          {/* Dung lượng & Ngày cập nhật */}
+          <p className="mt-1.5 text-[11px] font-medium text-gray-400 flex items-center gap-1.5">
+            <span>{document.size}</span>
+            <span className="h-1 w-1 rounded-full bg-gray-300" />
+            <span>{document.updatedAt}</span>
+          </p>
         </div>
 
-        {/* Context Menu */}
-        <div
-          className="absolute right-2 top-2 z-10 shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <DocumentContextMenu 
-            onAction={(action) => handleAction(action, document.id)} 
-            allowedActions={allowedActions}
-            extraItems={extraItems}
-          />
+        {/* 3. THẺ TAGS (Dạng Pill/Chip thanh lịch) */}
+        <div className="mt-2.5 pt-2 border-t border-gray-100/80">
+          {tags.length > 0 ? (
+            <div className="flex flex-wrap gap-1 max-h-[26px] overflow-hidden">
+              {tags.slice(0, 3).map((tag) => (
+                <span
+                  key={tag.id}
+                  className="inline-flex items-center rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 transition-colors hover:bg-gray-200/80"
+                >
+                  {tag.name}
+                </span>
+              ))}
+              {tags.length > 3 && (
+                <span className="inline-flex items-center rounded-md bg-gray-50 px-1 py-0.5 text-[10px] font-medium text-gray-400">
+                  +{tags.length - 3}
+                </span>
+              )}
+            </div>
+          ) : (
+            <span className="text-[11px] italic text-gray-300">Chưa có tag</span>
+          )}
         </div>
       </div>
     </div>
