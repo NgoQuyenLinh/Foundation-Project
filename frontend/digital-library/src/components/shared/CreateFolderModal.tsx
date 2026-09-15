@@ -22,8 +22,8 @@ export interface FolderSubmitData {
 interface CreateFolderModalProps {
   onClose: () => void;
   initialData?: FolderInitialData | null;
-  availableTags: { id: number; name: string }[];
-  onCreateTag?: (name: string) => Promise<{ id: number; name: string }>;
+  availableTags: { id: number; name: string; color?: string }[];
+  onCreateTag?: (name: string, color?: string) => Promise<{ id: number; name: string; color?: string }>;
   onSubmitData: (data: FolderSubmitData) => Promise<void>;
   isSubmitting: boolean;
 }
@@ -39,20 +39,28 @@ const COLORS = [
   { hex: "#64748B", tw: "bg-slate-500" },
 ];
 
-export function CreateFolderModal({ onClose, initialData, availableTags, onCreateTag, onSubmitData, isSubmitting }: CreateFolderModalProps) {
+export function CreateFolderModal({
+  onClose,
+  initialData,
+  availableTags,
+  onCreateTag,
+  onSubmitData,
+  isSubmitting,
+}: CreateFolderModalProps) {
   const isEditMode = !!initialData;
 
   const [folderName, setFolderName] = useState("");
   const [selectedColor, setSelectedColor] = useState(COLORS[0].hex);
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [tagSearchQuery, setTagSearchQuery] = useState("");
+  const [newTagColor, setNewTagColor] = useState(COLORS[0].hex); // Màu cho tag mới
   const [isCreatingTag, setIsCreatingTag] = useState(false);
 
   // Load dữ liệu ban đầu khi ở chế độ Chỉnh Sửa
   useEffect(() => {
     if (initialData) {
       setFolderName(initialData.name || "");
-      
+
       const matchedColor = COLORS.find(
         (c) => c.tw === initialData.color || c.hex === initialData.color
       );
@@ -86,30 +94,29 @@ export function CreateFolderModal({ onClose, initialData, availableTags, onCreat
     if (!name || !onCreateTag) return;
     setIsCreatingTag(true);
     try {
-      const newTag = await onCreateTag(name);
+      const newTag = await onCreateTag(name, newTagColor);
       setSelectedTagIds((prev) => [...prev, newTag.id]);
       setTagSearchQuery("");
+      setNewTagColor(COLORS[0].hex);
     } finally {
       setIsCreatingTag(false);
     }
   };
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  try {
-    // Thêm await để đợi Mutation xử lý xong từ API
-    await onSubmitData({
-      id: initialData?.id,
-      name: folderName.trim() || "Chưa có tên",
-      color: selectedColor,
-      tagIds: selectedTagIds,
-    });
-    // Sau khi xử lý xong mới tự động đóng Modal
-    onClose();
-  } catch (error) {
-    console.error("Lỗi khi lưu thư mục:", error);
-  }
-};
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await onSubmitData({
+        id: initialData?.id,
+        name: folderName.trim() || "Chưa có tên",
+        color: selectedColor,
+        tagIds: selectedTagIds,
+      });
+      onClose();
+    } catch (error) {
+      console.error("Lỗi khi lưu thư mục:", error);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm px-4">
@@ -169,6 +176,35 @@ const handleSubmit = async (e: React.FormEvent) => {
                 />
               </div>
 
+              {/* Bảng chọn màu sắc cho Tag mới */}
+              {tagSearchQuery.trim() !== "" && !isExactMatch && onCreateTag && (
+                <div className="mb-3 rounded-lg border border-gray-200 bg-white p-2.5 shadow-sm">
+                  <label className="mb-2 block text-xs font-semibold text-gray-700">
+                    Màu sắc cho tag mới
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {COLORS.map((color) => {
+                      const isSelected = newTagColor === color.hex;
+                      return (
+                        <button
+                          key={color.hex}
+                          type="button"
+                          onClick={() => setNewTagColor(color.hex)}
+                          className={cn(
+                            `flex h-6 w-6 items-center justify-center rounded-full transition-transform hover:scale-110 ${color.tw}`,
+                            isSelected
+                              ? "ring-2 ring-gray-900 ring-offset-1"
+                              : "ring-1 ring-black/10"
+                          )}
+                        >
+                          {isSelected && <Check className="h-3 w-3 text-white" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="max-h-36 overflow-y-auto pr-1 flex flex-wrap gap-2 custom-scrollbar">
                 {tagSearchQuery.trim() !== "" && !isExactMatch && onCreateTag && (
                   <button
@@ -204,21 +240,19 @@ const handleSubmit = async (e: React.FormEvent) => {
                       </button>
                     );
                   })
-                ) : (
-                  isExactMatch || tagSearchQuery.trim() === "" ? null : (
-                    <div className="w-full text-center text-xs text-gray-500 py-2">
-                      Không tìm thấy tag phù hợp.
-                    </div>
-                  )
+                ) : isExactMatch || tagSearchQuery.trim() === "" ? null : (
+                  <div className="w-full text-center text-xs text-gray-500 py-2">
+                    Không tìm thấy tag phù hợp.
+                  </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Chọn màu sắc */}
+          {/* Chọn màu sắc thư mục */}
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700">
-              Màu sắc
+              Màu sắc thư mục
             </label>
             <div className="flex flex-wrap items-center gap-3">
               {COLORS.map((color) => {

@@ -1,5 +1,6 @@
 // src/pages/group/components/GroupFolderModalContainer.tsx
-import { CreateFolderModal, type FolderInitialData } from "@/components/shared/CreateFolderModal";
+
+import { CreateFolderModal, type FolderInitialData, type FolderSubmitData } from "@/components/shared/CreateFolderModal";
 
 interface GroupFolderModalContainerProps {
   isOpen: boolean;
@@ -7,8 +8,8 @@ interface GroupFolderModalContainerProps {
   editingFolder: FolderInitialData | null;
   groupTags: any[];
   onClose: () => void;
-  onCreateTag: (name: string) => Promise<any>;
-  onSubmitData: (data: { name: string; color: string; tagIds: number[] }) => Promise<void>;
+  onCreateTag: (name: string, color?: string) => Promise<any>; // <-- Thêm param color
+  onSubmitData: (data: FolderSubmitData) => Promise<void>;
 }
 
 export function GroupFolderModalContainer({

@@ -1,7 +1,7 @@
 // frontend/digital-library/src/pages/group/components/DocumentsTab.tsx
 
 import { useQuery } from "@tanstack/react-query";
-import { FileBox, ArrowLeft } from "lucide-react";
+import { FileBox, ArrowLeft, Plus, FolderOpen } from "lucide-react";
 import EmptyState from "@/components/shared/EmptyState";
 import { FolderCard } from "@/components/shared/FolderCard";
 import { type FolderAction } from "@/components/shared/FolderContextMenu";
@@ -39,7 +39,6 @@ export default function DocumentsTab({
     thumbnail_path: doc.thumbnail_path || null,
     file_path: doc.file_path || null,             
     tags: doc.tags || [],                         
-    // Ép kiểu bắt nhiều định dạng trả về từ Backend
     folder_id: (doc as any).folder_id ?? (doc as any).folderId ?? (doc as any).folder?.id ?? null,
     _original: doc,
   }));
@@ -59,21 +58,19 @@ export default function DocumentsTab({
   };
 
   const { filteredDocuments: filteredCards } = useDocumentFilters(docCards);
-
-  // 'documents' truyền vào từ Props đã được lọc chuẩn xác ở useGroupSpace
-  // do đó chỉ cần hiển thị trực tiếp filteredCards mà không filter lại theo card.folder_id nữa
   const displayedCards = filteredCards;
-
   const currentFolder = folders.find((f) => f.id === selectedFolderId);
 
   if (isLoading) {
     return (
       <div className="space-y-5">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        {/* Skeleton Hàng thư mục cuộn ngang */}
+        <div className="flex w-full items-center gap-3 overflow-x-auto pb-3 flex-nowrap custom-scrollbar">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-20 animate-pulse rounded-xl bg-gray-200" />
+            <div key={i} className="h-[96px] w-[220px] shrink-0 animate-pulse rounded-xl bg-gray-200" />
           ))}
         </div>
+        {/* Skeleton Danh sách tài liệu */}
         <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
           {Array.from({ length: 10 }).map((_, i) => (
             <div key={i} className="h-40 animate-pulse rounded-xl bg-gray-200" />
@@ -91,42 +88,87 @@ export default function DocumentsTab({
 
   return (
     <div className="space-y-5">
-      {/* 1. SECTION THƯ MỤC HỌC TẬP */}
-      <section>
+      {/* 1. SECTION THƯ MỤC HỌC TẬP (1 hàng cuộn ngang) */}
+      <section className="w-full">
         <h2 className="mb-3 text-sm font-semibold text-gray-700">
           Thư mục học tập
         </h2>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {folders.map((folder) => {
-            const isSelected = selectedFolderId === folder.id;
 
-            return (
-              <div
-                key={folder.id}
-                className={`transition-all rounded-xl ${
-                  isSelected ? "ring-2 ring-primary-500 ring-offset-2" : ""
-                }`}
-              >
-                <FolderCard
-                  id={folder.id}
-                  name={folder.name}
-                  count={folder.document_count}
-                  color={folder.color}
-                  tags={getFolderTags(folder)}
-                  onClick={() => onSelectFolder?.(folder.id)}
-                  onAction={(action) =>
-                    onFolderAction(action as FolderAction, folder.id)
-                  }
-                />
-              </div>
-            );
-          })}
+        <div className="flex w-full items-center gap-3 overflow-x-auto pb-3 flex-nowrap custom-scrollbar">
+          {/* Thẻ Tất cả */}
+          <div
+            className={`
+              flex h-[96px] shrink-0 cursor-pointer items-center gap-3 rounded-xl border p-3.5 transition-all duration-300 bg-white
+              ${
+                selectedFolderId === null
+                  ? "border-primary-500 bg-primary-50/20 shadow-md min-w-[180px]"
+                  : "border-gray-200 hover:border-gray-300 hover:shadow-sm min-w-[160px]"
+              }
+            `}
+            onClick={() => onSelectFolder?.(null)}
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">
+              <FolderOpen className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-gray-900 leading-tight">
+                Tất cả
+              </h3>
+              <p className="mt-0.5 text-xs text-gray-400 font-medium">
+                Tất cả tài liệu
+              </p>
+            </div>
+          </div>
+
+          {/* Danh sách Thư mục Nhóm */}
+          {folders.map((folder) => (
+            <FolderCard
+              key={folder.id}
+              id={folder.id}
+              name={folder.name}
+              count={folder.document_count}
+              color={folder.color}
+              tags={getFolderTags(folder)}
+              isSelected={selectedFolderId === folder.id}
+              onClick={() => onSelectFolder?.(folder.id)}
+              onAction={(action) =>
+                onFolderAction(action as FolderAction, folder.id)
+              }
+            />
+          ))}
+
+          {/* Nút Tạo thư mục mới (chỉ hiện khi có quyền) */}
           {effectivePermission !== "view" && (
             <button
+              type="button"
               onClick={onAddFolder}
-              className="flex min-h-[64px] items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 p-5 text-sm font-medium text-gray-400 transition-all duration-150 hover:border-primary-300 hover:bg-primary-50 hover:text-primary-600"
+              className="
+                flex 
+                h-[96px] 
+                min-w-[200px] 
+                shrink-0 
+                items-center 
+                justify-center 
+                gap-2 
+                rounded-xl 
+                border 
+                border-dashed 
+                border-gray-300 
+                bg-gray-50/50 
+                text-sm 
+                font-medium 
+                text-gray-500 
+                transition-all 
+                duration-200 
+                hover:border-primary-400 
+                hover:bg-primary-50/40 
+                hover:text-primary-600
+              "
             >
-              + Thêm thư mục
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white shadow-xs">
+                <Plus className="h-4 w-4 text-gray-600" />
+              </div>
+              <span>Tạo thư mục mới</span>
             </button>
           )}
         </div>

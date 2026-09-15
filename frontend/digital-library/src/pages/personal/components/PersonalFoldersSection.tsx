@@ -1,6 +1,6 @@
 // src/pages/personal/components/PersonalFoldersSection.tsx
 
-import { FolderOpen, FolderPlus } from "lucide-react";
+import { FolderOpen, FolderPlus, Plus } from "lucide-react";
 import { FolderCard } from "@/components/shared/FolderCard";
 import { type FolderAction } from "@/components/shared/FolderContextMenu";
 import { cn } from "@/utils/cn";
@@ -33,71 +33,93 @@ export function PersonalFoldersSection({
   onOpenCreateModal,
   CardSkeleton,
 }: PersonalFoldersSectionProps) {
-  return (
-    <section>
-      <h2 className="text-sm font-semibold text-gray-700 mb-3">
+return (
+    <section className="w-full">
+      <h2 className="mb-3 text-sm font-semibold text-gray-700">
         Thư mục cá nhân
       </h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+
+      {/* Container 1 hàng duy nhất + cuộn ngang */}
+      <div className="flex w-full items-center gap-3 overflow-x-auto pb-3 flex-nowrap custom-scrollbar">
         {foldersLoading ? (
-          Array.from({ length: 5 }).map((_, index) => (
-            <CardSkeleton key={index} variant="folder" />
+          Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="h-[96px] w-[220px] shrink-0">
+              <CardSkeleton variant="folder" />
+            </div>
           ))
         ) : (
           <>
-            {/* Card Tất cả */}
+            {/* Thẻ Tất cả (Đã đồng bộ kích thước h-[96px] với FolderCard) */}
             <div
               className={cn(
-                "cursor-pointer rounded-xl border p-4 hover:border-primary-300 transition-colors bg-white",
+                "flex h-[96px] shrink-0 cursor-pointer items-center gap-3 rounded-xl border p-3.5 transition-all duration-300 bg-white",
                 selectedFolderId === null
-                  ? "border-primary-500 shadow-sm"
-                  : "border-gray-200"
+                  ? "border-primary-500 bg-primary-50/20 shadow-md min-w-[180px]"
+                  : "border-gray-200 hover:border-gray-300 hover:shadow-sm min-w-[160px]",
               )}
               onClick={() => onSelectFolder(null)}
             >
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-gray-50 text-gray-500">
-                  <FolderOpen className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">
-                    Tất cả
-                  </h3>
-                </div>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-600">
+                <FolderOpen className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-gray-900 leading-tight">
+                  Tất cả
+                </h3>
+                <p className="mt-0.5 text-xs text-gray-400 font-medium">
+                  Tất cả tài liệu
+                </p>
               </div>
             </div>
 
-            {/* Danh sách Thư mục */}
+            {/* Danh sách Thư mục (Render trực tiếp FolderCard, không cần div bọc) */}
             {folders?.map((folder) => (
-              <div
+              <FolderCard
                 key={folder.id}
-                className={cn(
-                  "rounded-xl border transition-colors bg-white",
-                  selectedFolderId === folder.id
-                    ? "border-primary-500 shadow-sm"
-                    : "border-gray-200"
-                )}
-              >
-                <FolderCard
-                  id={folder.id}
-                  name={folder.name}
-                  count={folder.document_count ?? 0}
-                  color={folder.color}
-                  tags={folder.tags}
-                  onClick={() => onSelectFolder(folder.id)}
-                  onAction={onFolderAction}
-                />
-              </div>
+                id={folder.id}
+                name={folder.name}
+                count={folder.document_count ?? 0}
+                color={folder.color}
+                tags={folder.tags}
+                isSelected={selectedFolderId === folder.id}
+                onClick={() => onSelectFolder(folder.id)}
+                onAction={onFolderAction}
+              />
             ))}
           </>
         )}
 
-        {/* Nút Thêm thư mục */}
+        {/* Nút Thêm thư mục mới (Cố định shrink-0 để không bị bóp nghẹt khi cuộn) */}
         <button
+          type="button"
           onClick={onOpenCreateModal}
-          className="flex min-h-[64px] items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 p-5 text-sm font-medium text-gray-400 hover:border-primary-300 hover:text-primary-600 hover:bg-primary-50 transition-all duration-150"
+          className="
+            flex 
+            h-[96px] 
+            min-w-[200px] 
+            shrink-0 
+            items-center 
+            justify-center 
+            gap-2 
+            rounded-xl 
+            border 
+            border-dashed 
+            border-gray-300 
+            bg-gray-50/50 
+            text-sm 
+            font-medium 
+            text-gray-500 
+            transition-all 
+            duration-200 
+            hover:border-primary-400 
+            hover:bg-primary-50/40 
+            hover:text-primary-600
+          "
         >
-          <FolderPlus className="h-5 w-5" />+ Thêm thư mục
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white shadow-xs">
+            <Plus className="h-4 w-4 text-gray-600" />
+          </div>
+          <span>Tạo thư mục mới</span>
         </button>
       </div>
     </section>

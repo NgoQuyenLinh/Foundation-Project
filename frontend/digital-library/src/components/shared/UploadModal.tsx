@@ -1,9 +1,10 @@
 // frontend/digital-library/src/components/shared/UploadModal.tsx
+
 import { useState, useRef } from "react";
 import { X, Upload, FileText, AlertCircle, Search, Plus, Check } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/utils/cn";
-import { mergeImagesToPdf } from "@/utils/pdfBuilder"; // <--- Import tiện ích gộp PDF
+import { mergeImagesToPdf } from "@/utils/pdfBuilder";
 
 export interface TagItem {
   id: number;
@@ -14,10 +15,21 @@ export interface TagItem {
 export interface UploadModalProps {
   onClose: () => void;
   availableTags?: TagItem[];
-  onCreateTag?: (name: string) => Promise<TagItem>;
+  onCreateTag?: (name: string, color?: string) => Promise<TagItem>;
   onUpload: (formData: FormData, selectedTagIds: number[]) => Promise<void>;
   isUploading: boolean;
 }
+
+const COLORS = [
+  { hex: "#4CAF50", tw: "bg-green-500" },
+  { hex: "#2196F3", tw: "bg-blue-500" },
+  { hex: "#F59E0B", tw: "bg-amber-500" },
+  { hex: "#9C27B0", tw: "bg-purple-500" },
+  { hex: "#EF4444", tw: "bg-red-500" },
+  { hex: "#06B6D4", tw: "bg-cyan-500" },
+  { hex: "#F97316", tw: "bg-orange-500" },
+  { hex: "#64748B", tw: "bg-slate-500" },
+];
 
 const ACCEPTED_MIME = [
   "application/pdf",
@@ -40,31 +52,29 @@ export function UploadModal({
   isUploading,
 }: UploadModalProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  
-  // Đổi từ 1 file sang mảng files để hỗ trợ nhiều ảnh
+
   const [files, setFiles] = useState<File[]>([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
-  
-  const [isProcessingPdf, setIsProcessingPdf] = useState(false); // State khi đang gộp PDF
+
+  const [isProcessingPdf, setIsProcessingPdf] = useState(false);
 
   const safeTags = availableTags ?? [];
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   const [tagSearchQuery, setTagSearchQuery] = useState("");
+  const [newTagColor, setNewTagColor] = useState(COLORS[0].hex); // Màu cho tag mới
   const [isCreatingTag, setIsCreatingTag] = useState(false);
 
-  // Xử lý khi chọn file(s)
   const processFiles = (selectedFiles: FileList | null) => {
     if (!selectedFiles || selectedFiles.length === 0) return;
     setError(null);
 
     const newFiles = Array.from(selectedFiles);
 
-    // Kiểm tra định dạng và dung lượng
     const invalid = newFiles.find((f) => !ACCEPTED_MIME.includes(f.type));
     if (invalid) return setError("Tồn tại định dạng file không được hỗ trợ.");
-    
+
     const oversized = newFiles.find((f) => f.size > MAX_MB * 1024 * 1024);
     if (oversized) return setError(`File "${oversized.name}" vượt quá ${MAX_MB}MB.`);
 
@@ -75,16 +85,13 @@ export function UploadModal({
     }
 
     if (newFiles.length === 1 && !newFiles[0].type.startsWith("image/")) {
-      // Nếu là 1 file PDF/Word -> Ghi đè file cũ
       setFiles([newFiles[0]]);
       setTitle(newFiles[0].name.replace(/\.[^/.]+$/, ""));
     } else {
-      // Nếu là ảnh -> Thêm vào danh sách ảnh hiện tại
       const currentImages = files.filter((f) => f.type.startsWith("image/"));
       const combined = [...currentImages, ...newFiles];
       setFiles(combined);
-      
-      // Đặt tiêu đề mặc định nếu chưa có
+
       if (!title) {
         setTitle(combined.length === 1 ? combined[0].name.replace(/\.[^/.]+$/, "") : "Tai_Lieu_Anh_Gop");
       }
@@ -105,7 +112,6 @@ export function UploadModal({
       setError(null);
       let fileToUpload: File = files[0];
 
-      // Nếu là hình ảnh, tự động gộp thành 1 file PDF
       if (files[0].type.startsWith("image/")) {
         setIsProcessingPdf(true);
         const pdfName = (title.trim() || "Tai_Lieu_Anh").replace(/\s+/g, "_") + ".pdf";
@@ -129,20 +135,22 @@ export function UploadModal({
     }
   };
 
-  // Logic Tags giữ nguyên
   const toggleTag = (tagId: number) => {
     setSelectedTagIds((prev) => prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]);
   };
+
   const filteredTags = safeTags.filter((tag) => tag.name.toLowerCase().includes(tagSearchQuery.toLowerCase()));
   const isExactMatch = safeTags.some((tag) => tag.name.toLowerCase() === tagSearchQuery.toLowerCase().trim());
+
   const handleCreateNewTag = async () => {
     const name = tagSearchQuery.trim();
     if (!name || !onCreateTag) return;
     setIsCreatingTag(true);
     try {
-      const newTag = await onCreateTag(name);
+      const newTag = await onCreateTag(name, newTagColor);
       setSelectedTagIds((prev) => [...prev, newTag.id]);
       setTagSearchQuery("");
+      setNewTagColor(COLORS[0].hex);
     } finally {
       setIsCreatingTag(false);
     }
@@ -159,7 +167,7 @@ export function UploadModal({
         </div>
 
         <div className="flex flex-col gap-4 px-6 py-5 overflow-y-auto custom-scrollbar">
-          {/* Drop zone hỗ trợ nhiều file */}
+          {/* Drop zone */}
           <div
             onClick={() => inputRef.current?.click()}
             onDrop={(e) => { e.preventDefault(); processFiles(e.dataTransfer.files); }}
@@ -169,7 +177,7 @@ export function UploadModal({
             <input
               ref={inputRef}
               type="file"
-              multiple // Cho phép chọn nhiều file
+              multiple
               className="hidden"
               accept={ACCEPTED_MIME.join(",")}
               onChange={(e) => processFiles(e.target.files)}
@@ -191,7 +199,6 @@ export function UploadModal({
               </div>
             )}
 
-            {/* Hiển thị dạng lưới nếu là Ảnh */}
             {files.length > 0 && files[0].type.startsWith("image/") && (
               <div className="w-full text-left">
                 <div className="mb-2 flex items-center justify-between">
@@ -202,7 +209,7 @@ export function UploadModal({
                   {files.map((f, idx) => (
                     <div key={idx} className="relative h-20 w-20 shrink-0 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden group">
                       <img src={URL.createObjectURL(f)} alt="preview" className="h-full w-full object-cover" />
-                      <button 
+                      <button
                         onClick={(e) => removeFile(idx, e)}
                         className="absolute top-1 right-1 bg-black/50 p-1 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
                       >
@@ -233,7 +240,7 @@ export function UploadModal({
             />
           </div>
 
-          {/* Phần Tags giữ nguyên hoàn toàn */}
+          {/* Phần Tags kèm chọn màu tag mới */}
           <div>
             <label className="mb-1.5 flex items-center justify-between text-sm font-medium text-gray-700">
               <span>Gắn nhãn dán (Tags)</span>
@@ -250,6 +257,36 @@ export function UploadModal({
                   className="w-full rounded-md border border-gray-300 bg-white py-1.5 pl-8 pr-3 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
+
+              {/* Bảng chọn màu sắc cho Tag mới */}
+              {tagSearchQuery.trim() !== "" && !isExactMatch && onCreateTag && (
+                <div className="mb-3 rounded-lg border border-gray-200 bg-white p-2.5 shadow-sm">
+                  <label className="mb-2 block text-xs font-semibold text-gray-700">
+                    Màu sắc cho tag mới
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {COLORS.map((color) => {
+                      const isSelected = newTagColor === color.hex;
+                      return (
+                        <button
+                          key={color.hex}
+                          type="button"
+                          onClick={() => setNewTagColor(color.hex)}
+                          className={cn(
+                            `flex h-6 w-6 items-center justify-center rounded-full transition-transform hover:scale-110 ${color.tw}`,
+                            isSelected
+                              ? "ring-2 ring-gray-900 ring-offset-1"
+                              : "ring-1 ring-black/10"
+                          )}
+                        >
+                          {isSelected && <Check className="h-3 w-3 text-white" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="max-h-32 overflow-y-auto pr-1 flex flex-wrap gap-2 custom-scrollbar">
                 {tagSearchQuery.trim() !== "" && !isExactMatch && onCreateTag && (
                   <button

@@ -11,6 +11,7 @@ import {
 export interface FolderTag {
   id: number;
   name: string;
+  color?: string | null;
 }
 
 export interface FolderCardProps {
@@ -19,6 +20,7 @@ export interface FolderCardProps {
   count: number;
   color?: string | null;
   tags?: FolderTag[];
+  isSelected?: boolean; // <-- Bổ sung trạng thái active/selected
   onClick: () => void;
   onAction?: (action: FolderAction, folderId: number) => void;
   allowedActions?: string[];
@@ -31,35 +33,37 @@ export function FolderCard({
   count,
   color,
   tags = [],
+  isSelected = false,
   onClick,
   onAction,
   allowedActions,
   extraItems,
 }: FolderCardProps) {
-  // Màu mặc định nếu folder chưa có màu
-  const folderColor = color || "#2F7D46";
+  const folderColor = color || "#475569";
 
   return (
     <Card
-      className="
+      className={`
         group
         relative
         flex
-        min-h-[108px]
+        h-[96px]
+        shrink-0
         cursor-pointer
-        items-center
+        items-start
         gap-3
         rounded-xl
         border
-        border-gray-200
-        bg-white
-        p-4
+        p-3.5
         transition-all
-        duration-150
-        hover:border-primary-300
-        hover:bg-primary-50
-        hover:shadow-sm
-      "
+        duration-300
+        ease-in-out
+        ${
+          isSelected
+            ? "border-primary-500 bg-primary-50/20 shadow-md min-w-[320px] max-w-[480px]"
+            : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm flex-1 min-w-[210px] max-w-[300px]"
+        }
+      `}
       onClick={onClick}
       role="button"
       tabIndex={0}
@@ -70,10 +74,7 @@ export function FolderCard({
         }
       }}
     >
-      {/* =========================
-          Folder icon
-      ========================== */}
-
+      {/* Folder Icon */}
       <div
         className="
           flex
@@ -83,77 +84,60 @@ export function FolderCard({
           items-center
           justify-center
           rounded-lg
+          mt-0.5
         "
         style={{
           backgroundColor: `${folderColor}12`,
           color: folderColor,
         }}
       >
-        <Folder
-          className="h-6 w-6"
-          fill="currentColor"
-          fillOpacity={0.18}
-        />
+        <Folder className="h-5 w-5" fill="currentColor" fillOpacity={0.18} />
       </div>
 
-      {/* =========================
-          Folder information
-      ========================== */}
-
-      <div className="min-w-0 flex-1 pr-1">
-        {/* Folder name */}
+      {/* Thông tin Folder */}
+      <div className="min-w-0 flex-1 pr-5">
+        {/* Tên Folder */}
         <h3
-          className="
-            truncate
-            text-sm
-            font-semibold
-            leading-5
-            text-gray-900
-          "
+          className="truncate text-sm font-semibold text-gray-900 leading-tight"
           title={name}
         >
           {name}
         </h3>
 
-        {/* Document count */}
-        <p className="mt-0.5 text-xs leading-4 text-gray-400">
-          {count} {count === 1 ? "tài liệu" : "tài liệu"}
+        {/* Số lượng tài liệu */}
+        <p className="mt-0.5 text-xs text-gray-400 font-medium">
+          {count} tài liệu
         </p>
 
-        {/* Tags */}
+        {/* Khối hiển thị tối đa 2 hàng Tag */}
         {tags.length > 0 && (
-          <div
-            className="
-              mt-0.5
-              line-clamp-3
-              overflow-hidden
-              text-xs
-              italic
-              leading-4
-              text-gray-400
-            "
-            title={tags.map((tag) => `#${tag.name}`).join(" ")}
-          >
-            {tags.map((tag, index) => (
-              <span key={tag.id}>
-                #{tag.name}
-                {index < tags.length - 1 && " "}
-              </span>
-            ))}
+          <div className="mt-1.5 flex flex-wrap gap-1 max-h-[38px] overflow-hidden">
+            {tags.map((tag) => {
+              const tagColor = tag.color || "#64748B";
+              return (
+                <span
+                  key={tag.id}
+                  className="inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium leading-none"
+                  style={{
+                    backgroundColor: `${tagColor}12`,
+                    color: tagColor,
+                  }}
+                >
+                  #{tag.name}
+                </span>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* =========================
-          Context menu
-      ========================== */}
-
+      {/* Context Menu (...) */}
       {onAction && (
         <div
           className="
             absolute
-            right-3
-            top-3
+            right-2
+            top-2
             z-10
             shrink-0
             opacity-0
