@@ -1,14 +1,14 @@
 // frontend/digital-library/src/components/shared/DocumentContextMenu.tsx
 import { Dropdown } from "@/components/ui/Dropdown";
 import { 
-  Eye, 
   Download, 
   Share2, 
   Heart, 
   Edit2, 
   FolderInput, 
   Trash2,
-  MoreVertical
+  MoreVertical,
+  ExternalLink // <-- Import thêm Icon này
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
@@ -38,7 +38,8 @@ export interface DocumentContextMenuProps {
 
 export function DocumentContextMenu({ onAction, allowedActions, extraItems = [] }: DocumentContextMenuProps) {
   const DEFAULT_ITEMS: DocumentMenuItem[] = [
-    { action: "view", icon: <Eye className="h-4 w-4" />, label: "Xem/Xem trước" },
+    // Sửa icon và nhãn thành Mở trong thẻ mới
+    { action: "view", icon: <ExternalLink className="h-4 w-4" />, label: "Mở trong thẻ mới" },
     { action: "download", icon: <Download className="h-4 w-4" />, label: "Tải xuống" },
     { action: "share", icon: <Share2 className="h-4 w-4" />, label: "Chia sẻ" },
     { action: "favorite", icon: <Heart className="h-4 w-4" />, label: "Thêm vào Yêu thích" },

@@ -18,6 +18,7 @@ import {
   X,
   Search,
   Check,
+  ExternalLink,
 } from "lucide-react";
 
 // UI Components
@@ -41,10 +42,11 @@ export interface TagType {
   color?: string;
 }
 
-type TabKey = "detail" | "description" | "note" | "activity";
+type TabKey = "detail" | "content" | "description" | "note" | "activity";
 
 const TABS: { key: TabKey; label: string }[] = [
-  { key: "detail", label: "Chi tiết" },
+  { key: "detail", label: "Bản xem trước" },
+  { key: "content", label: "Nội dung OCR" },
   { key: "description", label: "Mô tả" },
   { key: "note", label: "Ghi chú" },
   { key: "activity", label: "Hoạt động" },
@@ -93,26 +95,17 @@ export interface DocumentDetailPermissions {
 }
 
 export interface SharedDocumentDetailProps {
-  // 1. Dữ liệu định danh
-  documentId?: number; // Truyền từ ngoài vào (dành cho modal/tab), nếu không có sẽ lấy từ URL params
-
-  // 2. Các hàm gọi API (để ghi đè khi dùng ở Group/Lớp học)
+  documentId?: number;
   fetchDocumentFn?: (id: number) => Promise<any>;
   updateDocumentFn?: (id: number, data: { title: string }) => Promise<any>;
   deleteDocumentFn?: (id: number) => Promise<any>;
   updateTagsFn?: (id: number, tagIds: number[]) => Promise<any>;
   removeTagFn?: (id: number, tagId: number) => Promise<any>;
-
-  // 3. React Query Config
-  queryKeyPrefix?: string[]; // Mặc định là ["document"]
-
-  // 4. Phân quyền
+  queryKeyPrefix?: string[];
   permissions?: DocumentDetailPermissions;
-
-  // 5. Điều hướng
-  backUrl?: string; // URL để quay lại sau khi xóa hoặc ấn nút Back
-  onBack?: () => void; // Hàm custom khi ấn nút Back
-  onDeleteSuccess?: () => void; // Hàm custom khi xóa thành công
+  backUrl?: string;
+  onBack?: () => void;
+  onDeleteSuccess?: () => void;
 }
 
 // ==========================================
@@ -146,63 +139,74 @@ function StatItem({ label, value }: StatItemProps) {
   );
 }
 
-function TabDetail({ doc }: { doc: any }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+// Sub-component Tab Detail (Bản xem trước)
+function TabDetail({ doc, fileUrl }: { doc: any; fileUrl: string }) {
+  const isImage = doc.file_type?.startsWith("image/");
+  const isPdf = doc.file_type === "application/pdf";
+  const canPreview = isImage || isPdf;
 
   const thumbnailUrl = doc.thumbnail_path
     ? `${import.meta.env.VITE_API_URL}/${doc.thumbnail_path}`
     : null;
 
-  const isLongContent = Boolean(doc.content && doc.content.length > 500);
-
   return (
-    <div className="space-y-6">
-      {/* Thumbnail Preview */}
-      <div className="flex justify-center rounded-xl bg-gray-100 py-8">
-        {thumbnailUrl ? (
+    <div className="flex flex-col items-center justify-center rounded-xl bg-gray-100 p-2 min-h-[500px] border border-gray-200">
+      {canPreview ? (
+        isImage ? (
           <img
-            src={thumbnailUrl}
+            src={fileUrl}
             alt={doc.title}
-            className="max-h-72 rounded-lg shadow-lg object-contain"
+            className="max-w-full max-h-[700px] rounded object-contain shadow-sm"
             onError={(e) => {
               e.currentTarget.style.display = "none";
             }}
           />
         ) : (
-          <div className="flex h-60 w-44 flex-col items-center justify-center rounded-xl bg-gradient-to-b from-gray-400 to-gray-500 px-6 text-white shadow-lg">
-            <p className="text-center text-base font-bold">{doc.title}</p>
-          </div>
-        )}
-      </div>
-
-      {/* Preview nội dung text từ DB */}
-      {doc.content && (
-        <div>
-          <h3 className="text-sm font-semibold text-gray-900 mb-2">
-            Xem nhanh nội dung
-          </h3>
-
-          <div
-            className={cn(
-              "text-sm text-gray-600 leading-relaxed whitespace-pre-line rounded-lg bg-gray-50/60 p-3 border border-gray-100 transition-all",
-              isExpanded ? "max-h-96 overflow-y-auto" : "line-clamp-6",
-            )}
-          >
-            {isExpanded
-              ? doc.content
-              : doc.content.slice(0, 500) + (isLongContent ? "..." : "")}
-          </div>
-
-          {isLongContent && (
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="mt-2 text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline focus:outline-none transition-colors"
-            >
-              {isExpanded ? "Thu gọn ▲" : "Xem thêm ▼"}
-            </button>
+          <iframe
+            src={fileUrl}
+            className="w-full h-[700px] rounded shadow-sm bg-white"
+            title={doc.title}
+          />
+        )
+      ) : (
+        <div className="flex flex-col items-center justify-center space-y-4">
+          {thumbnailUrl ? (
+            <img
+              src={thumbnailUrl}
+              alt={doc.title}
+              className="h-60 rounded object-contain shadow"
+            />
+          ) : (
+            <div className="flex h-40 w-32 flex-col items-center justify-center rounded-xl bg-gradient-to-b from-gray-400 to-gray-500 text-white shadow">
+              <span className="text-xs font-bold text-center px-2">
+                {doc.title}
+              </span>
+            </div>
           )}
+          <p className="text-sm text-gray-500 max-w-sm text-center">
+            Trình duyệt không hỗ trợ xem trước trực tiếp định dạng này. Vui lòng nhấn "Mở trong thẻ mới" hoặc "Tải xuống" để xem.
+          </p>
         </div>
       )}
+    </div>
+  );
+}
+
+// Sub-component Tab Content (Nội dung OCR)
+function TabContent({ content }: { content: string }) {
+  if (!content) {
+    return (
+      <div className="py-12 flex flex-col items-center justify-center text-center">
+        <p className="text-sm text-gray-500">Tài liệu này chưa có dữ liệu văn bản (OCR).</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gray-50/80 rounded-xl p-5 border border-gray-100 max-h-[700px] overflow-y-auto custom-scrollbar">
+      <p className="text-sm text-gray-700 leading-loose whitespace-pre-wrap font-serif">
+        {content}
+      </p>
     </div>
   );
 }
@@ -324,7 +328,7 @@ export function DocumentDetail(props: SharedDocumentDetailProps = {}) {
     enabled: !isNaN(id) && id > 0,
   });
 
-  // Mutation cập nhật tên tài liệu trực tiếp
+  // Mutation cập nhật tên tài liệu
   const renameMutation = useMutation({
     mutationFn: (newTitle: string) => updateDocumentFn(id, { title: newTitle }),
     onSuccess: () => {
@@ -362,7 +366,6 @@ export function DocumentDetail(props: SharedDocumentDetailProps = {}) {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Đồng bộ Tag của document vào state (draft & original)
   useEffect(() => {
     if (!doc) return;
 
@@ -651,7 +654,10 @@ export function DocumentDetail(props: SharedDocumentDetailProps = {}) {
           </div>
 
           <div className="pt-1">
-            {activeTab === "detail" && <TabDetail doc={doc} />}
+            {activeTab === "detail" && (
+              <TabDetail doc={doc} fileUrl={fileDownloadUrl} />
+            )}
+            {activeTab === "content" && <TabContent content={doc.content} />}
             {activeTab === "description" && (
               <TabDescription
                 description={doc.description ?? "Chưa có mô tả."}
@@ -902,6 +908,12 @@ export function DocumentDetail(props: SharedDocumentDetailProps = {}) {
 
             <div className="flex flex-col mt-1">
               {[
+                {
+                  icon: ExternalLink,
+                  label: "Mở trong thẻ mới",
+                  onClick: () => window.open(fileDownloadUrl, "_blank"),
+                  show: true,
+                },
                 {
                   icon: Share2,
                   label: "Chia sẻ tài liệu",
