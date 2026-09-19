@@ -176,11 +176,11 @@ export function DocumentCard({
   return (
     <div
       id={`doc-${document.id}`}
-      className={`group relative flex h-[280px] w-full flex-col overflow-hidden rounded-xl border border-gray-200/80 bg-white shadow-xs transition-all duration-200 hover:-translate-y-1 hover:shadow-md ${theme.border}`}
+      className={`group relative flex h-[280px] w-full flex-col rounded-xl border border-gray-200/80 bg-white shadow-xs transition-all duration-200 hover:z-30 hover:-translate-y-1 hover:shadow-md focus-within:z-30 ${theme.border}`}
     >
-      {/* 1. KHUNG PREVIEW TÀI LIỆU (Màu nền dịu nhẹ theo loại file) */}
+      {/* 1. KHUNG PREVIEW TÀI LIỆU */}
       <div
-        className={`relative h-[135px] w-full shrink-0 cursor-pointer overflow-hidden transition-colors ${theme.bg} flex items-center justify-center`}
+        className={`relative h-[135px] w-full shrink-0 cursor-pointer overflow-hidden rounded-t-xl transition-colors ${theme.bg} flex items-center justify-center`}
         onClick={() => navigate(`${basePath}/${document.id}`)}
       >
         {/* Badge định dạng ở góc trên bên trái */}
@@ -208,7 +208,7 @@ export function DocumentCard({
       </div>
 
       {/* 2. KHUNG THÔNG TIN TÀI LIỆU */}
-      <div className="relative flex flex-1 flex-col justify-between p-3.5">
+      <div className="relative flex flex-1 flex-col justify-between p-3.5 rounded-b-xl bg-white">
         <div>
           {/* Tiêu đề & Menu thao tác */}
           <div className="flex items-start justify-between gap-1.5">
@@ -220,9 +220,9 @@ export function DocumentCard({
               {document.name}
             </h3>
 
-            {/* Context Menu (Hiển thị khi hover hoặc khi focus) */}
+            {/* Context Menu (Nổi lên trên cùng khi hover/focus) */}
             <div
-              className="shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100"
+              className="relative z-50 shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100"
               onClick={(e) => e.stopPropagation()}
             >
               <DocumentContextMenu
@@ -241,7 +241,7 @@ export function DocumentCard({
           </p>
         </div>
 
-        {/* 3. THẺ TAGS (Dạng Pill/Chip thanh lịch) */}
+        {/* 3. THẺ TAGS (Dạng Pill/Chip) */}
         <div className="mt-2.5 pt-2 border-t border-gray-100/80">
           {tags.length > 0 ? (
             <div className="flex flex-wrap gap-1 max-h-[26px] overflow-hidden">
