@@ -48,7 +48,7 @@ export function PersonalDocumentsSection({
   CardSkeleton,
 }: PersonalDocumentsSectionProps) {
   return (
-    <section>
+    <section className="pb-70">
       <h2 className="text-sm font-semibold text-gray-700 mb-3">Tài liệu</h2>
       <div
         className={cn(
