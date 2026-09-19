@@ -242,31 +242,38 @@ async def list_group_documents(
         "total_pages": (total + page_size - 1) // page_size if page_size else 1,
     }
 
-@router.get("/groups/{group_id}/documents")
-async def get_group_documents(
+@router.get("/groups/{group_id}/documents/{document_id}", response_model=DocumentOut)
+async def get_group_document(
     group_id: int,
+    document_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Kiểm tra quyền thành viên trong nhóm
     await require_member(db, group_id, current_user.id)
 
-    stmt = (
+    # Truy vấn tài liệu kèm theo danh sách tags và owner
+    result = await db.execute(
         select(Document)
         .options(
-            selectinload(Document.owner),  # <--- THÊM NẠP OWNER Ở ĐÂY
+            selectinload(Document.owner),
             selectinload(Document.tags)
         )
         .where(
+            Document.id == document_id,
             Document.workspace_id == group_id,
-            Document.is_deleted == False
+            Document.is_deleted == False,
         )
-        .order_by(Document.created_at.desc())
     )
+    document = result.scalar_one_or_none()
 
-    result = await db.execute(stmt)
-    documents = result.scalars().all()
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy tài liệu trong nhóm này",
+        )
 
-    return {"items": documents}
+    return document
 
 @router.post("/groups/{group_id}/documents/upload", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
 async def upload_group_document(

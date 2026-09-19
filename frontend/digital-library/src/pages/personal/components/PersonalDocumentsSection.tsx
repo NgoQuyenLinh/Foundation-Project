@@ -97,6 +97,20 @@ export function PersonalDocumentsSection({
 
   const listItems = filteredDocCards.map(toListItem);
 
+function toListItem(doc: DocCardType): DocumentListItem {
+  return {
+    id: doc.id,
+    title: doc.name,
+    type: doc.type,
+    updatedAt: doc.updatedAt,
+    size: parseSizeToBytes(doc.size),
+    thumbnail_path: doc.thumbnail_path,
+    owner: doc.owner ? { full_name: doc.owner.name } : undefined,
+    tags: doc.tags,
+    workspace_type: "personal",
+  };
+}
+
   return (
     <section className="pb-70">
       {/* Header: title + view toggle */}
