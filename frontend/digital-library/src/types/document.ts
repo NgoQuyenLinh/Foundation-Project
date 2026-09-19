@@ -1,7 +1,17 @@
+// frontend/digital-library/src/types/document.ts
+
 export interface Tag {
   id: number;
   name: string;
   color?: string;
+}
+
+export interface DocumentOwner {
+  id: number;
+  username: string;
+  full_name?: string | null;
+  avatar?: string | null;
+  avatar_url?: string | null;
 }
 
 export interface Folder {
@@ -39,6 +49,7 @@ export interface Document {
   orphaned_at?: string | null;
   trash_source?: "personal" | "group_orphaned" | string | null;
   trash_group_name?: string | null;
+  owner?: DocumentOwner | null; // <-- Thuộc tính mới bổ sung
 }
 
 export interface PaginatedDocuments {

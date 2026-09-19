@@ -29,9 +29,18 @@ class DocumentUpdate(BaseModel):
 class DocumentTagsUpdate(BaseModel):
     tag_ids: list[int] = Field(default_factory=list)
 
+class DocumentOwnerOut(BaseModel):
+    id: int
+    username: str
+    full_name: Optional[str] = None
+    avatar: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
 class DocumentOut(DocumentBase):
     id: int
     owner_id: int
+    owner: Optional[DocumentOwnerOut] = None
     source_document_id: Optional[int] = None
     file_path: str
     file_type: Optional[str] = None

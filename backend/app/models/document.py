@@ -47,7 +47,7 @@ class Document(Base, TimestampMixin):
     trash_batch_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("trash_batches.id"))
 
     # Relationships
-    owner: Mapped["User"] = relationship("User", back_populates="documents")
+    owner: Mapped["User"] = relationship("User", back_populates="documents",lazy="selectin")
     workspace: Mapped[Optional["Workspace"]] = relationship("Workspace", back_populates="documents")
     category: Mapped[Optional["Category"]] = relationship("Category", back_populates="documents")
     source_document: Mapped[Optional["Document"]] = relationship("Document", remote_side=[id], back_populates="derived_documents")
