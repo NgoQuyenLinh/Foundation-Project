@@ -1,27 +1,36 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+// Layouts & Auth
 import { AuthLayout } from "@/layouts/AuthLayout";
 import { MainLayout } from "@/layouts/MainLayout";
+import ProtectedRoute from "@/components/shared/ProtectedRoute";
+import { useRestoreSession } from "@/hooks/useRestoreSession";
 import { LoginPage } from "@/pages/auth/LoginPage";
+
+// Pages - Personal
+import { PersonalHome } from "@/pages/personal/PersonalHome";
 import { PersonalDashboard } from "@/pages/personal/PersonalDashboard";
 import { PersonalDocuments } from "@/pages/personal/PersonalDocuments";
-import { DocumentDetail } from "@/components/shared/DocumentDetail";
 import SharedWithMe from "@/pages/personal/SharedWithMe";
 import FavoritesPage from "@/pages/personal/FavoritesPage";
-import TrashPage from "@/pages/trash/TrashPage";
+import TrashPage from "@/pages/personal/TrashPage";
+
+// Pages - Group
 import GroupList from "@/pages/group/GroupList";
 import GroupSpace from "@/pages/group/GroupSpace";
+import GroupDocumentDetailPage from "@/pages/group/GroupDocumentDetailPage";
+
+// Pages - Other Spaces & General
 import ClassSpace from "@/pages/class/ClassSpace";
 import FacultySpace from "@/pages/faculty/FacultySpace";
 import SchoolSpace from "@/pages/school/SchoolSpace";
 import StatsPage from "@/pages/stats/StatsPage";
 import SettingsPage from "@/pages/settings/SettingsPage";
-import ProtectedRoute from "@/components/shared/ProtectedRoute";
-import { useRestoreSession } from "@/hooks/useRestoreSession";
-import GroupDocumentDetailPage from "@/pages/group/GroupDocumentDetailPage";
-import { PersonalHome } from "./pages/personal/PersonalHome";
-import { SearchPage } from "./pages/search/SearchPage";
+import { SearchPage } from "@/pages/search/SearchPage";
 
+// Shared Components
+import { DocumentDetail } from "@/components/shared/DocumentDetail";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,10 +62,10 @@ function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
       </Route>
 
-      {/* Protected routes — phải đăng nhập */}
+      {/* Protected routes — Bắt buộc đăng nhập */}
       <Route element={<ProtectedRoute />}>
         <Route element={<MainLayout />}>
-          {/* Personal section */}
+          {/* Section: Personal */}
           <Route path="/personal" element={<PersonalHome />} />
           <Route path="/personal/dashboard" element={<PersonalDashboard />} />
           <Route path="/personal/documents" element={<PersonalDocuments />} />
@@ -64,18 +73,18 @@ function AppRoutes() {
           <Route path="/personal/shared" element={<SharedWithMe />} />
           <Route path="/personal/favorites" element={<FavoritesPage />} />
           <Route path="/personal/trash" element={<TrashPage />} />
+
+          {/* Section: Groups */}
           <Route path="/groups" element={<GroupList />} />
           <Route path="/groups/:id" element={<GroupSpace />} />
-          <Route path="/class" element={<ClassSpace />} />
-          <Route path="/stats" element={<StatsPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/search" element={<SearchPage />} />
           <Route
             path="/groups/:id/documents/:docId"
             element={<GroupDocumentDetailPage />}
           />
 
+          {/* Section: Class & Search */}
           <Route path="/class" element={<ClassSpace />} />
+          <Route path="/search" element={<SearchPage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
 
@@ -92,12 +101,8 @@ function AppRoutes() {
           </Route>
         </Route>
       </Route>
-      <Route
-        path="/groups/:id/documents/:docId"
-        element={<GroupDocumentDetailPage />}
-      />
 
-      {/* Fallback */}
+      {/* Fallback & Redirects */}
       <Route path="/" element={<Navigate to="/personal" replace />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

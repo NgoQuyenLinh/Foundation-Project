@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArchiveRestore, FileText, HardDrive, Star, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
-import { groupService } from "@/services/groupService";
+import { trashService } from "@/services/trashService";
 import { formatSize } from "@/utils/formatSize";
 import { groupDocsIntoBatches } from "@/utils/trashUtils";
 import {
@@ -13,67 +13,65 @@ import {
   TrashBatchRow,
   MobileTrashBatch,
 } from "@/components/shared/trash";
-import type { TrashTabProps } from "../types/groupSpace.types";
 
-export default function TrashTab({ documents, groupId }: TrashTabProps) {
+export default function TrashPage() {
   const queryClient = useQueryClient();
   const [expandedBatchId, setExpandedBatchId] = useState<number | null>(null);
   const [showEmptyConfirm, setShowEmptyConfirm] = useState(false);
 
-  // Kế thừa helper groupDocsIntoBatches từ shared
-  const batches = useMemo(() => groupDocsIntoBatches(documents), [documents]);
+  const { data: trashedDocs = [], isLoading } = useQuery({
+    queryKey: ["trash"],
+    queryFn: trashService.getAll,
+  });
+
+  const batches = useMemo(() => groupDocsIntoBatches(trashedDocs), [trashedDocs]);
 
   const restoreMutation = useMutation({
     mutationFn: async (docIds: number[]) => {
-      await Promise.all(
-        docIds.map((docId) => groupService.restoreFromTrash(groupId, docId))
-      );
+      await Promise.all(docIds.map((id) => trashService.restore(id)));
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["group-trash", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["group-documents", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["trash"] });
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
       setExpandedBatchId(null);
     },
   });
 
   const emptyTrashMutation = useMutation({
-    mutationFn: async () => {
-      const allDocIds = documents.map((doc) => doc.id);
-      await Promise.all(
-        allDocIds.map((docId) => groupService.restoreFromTrash(groupId, docId))
-      );
-    },
+    mutationFn: trashService.emptyTrash,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["group-trash", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["group-documents", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["trash"] });
       setShowEmptyConfirm(false);
     },
   });
 
-  const totalDocuments = documents.length;
-  const totalStorageBytes = documents.reduce(
+  const totalDocuments = trashedDocs.length;
+  const totalStorageBytes = trashedDocs.reduce(
     (sum: number, d: any) => sum + (d.file_size ?? 0),
     0
   );
 
+  if (isLoading) {
+    return <div className="h-64 rounded-xl bg-gray-200 animate-pulse" />;
+  }
+
   return (
     <div className="flex flex-col gap-6">
-      {/* Header riêng cho Nhóm */}
       <section>
-        <h2 className="text-lg font-semibold text-gray-900">Thùng rác nhóm</h2>
-        <p className="mt-0.5 text-sm text-gray-500">
-          Các tài liệu bị xóa trong nhóm sẽ được lưu trữ tạm thời trong 30 ngày.
+        <h1 className="text-xl font-semibold text-gray-900">Thùng rác</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          Tài liệu trong thùng rác sẽ bị xóa vĩnh viễn sau 30 ngày.
         </p>
       </section>
 
-      {/* Reused Shared Stat Cards */}
+      {/* Stats */}
       <section className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <TrashStatCard
           icon={<ArchiveRestore className="h-5 w-5" />}
           iconClassName="bg-green-50 text-green-600"
           label="Gói xóa"
           value={batches.length}
-          description="Gói lưu trữ nhóm"
+          description="Gói lưu trữ tạm thời"
         />
         <TrashStatCard
           icon={<FileText className="h-5 w-5" />}
@@ -87,17 +85,17 @@ export default function TrashTab({ documents, groupId }: TrashTabProps) {
           iconClassName="bg-yellow-50 text-yellow-600"
           label="Dung lượng"
           value={formatSize(totalStorageBytes)}
-          description="Dung lượng khôi phục"
+          description="Khả năng phục hồi tối đa"
         />
       </section>
 
-      {/* Main Table Container */}
+      {/* Main Table */}
       <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-gray-800">Các gói xóa gần đây</h3>
+            <h2 className="text-sm font-semibold text-gray-800">Các gói xóa gần đây</h2>
             <p className="mt-0.5 text-xs text-gray-400">
-              Danh sách tài liệu đã bị xóa khỏi nhóm.
+              Các tài liệu được xóa theo từng đợt.
             </p>
           </div>
 
@@ -114,10 +112,7 @@ export default function TrashTab({ documents, groupId }: TrashTabProps) {
         </div>
 
         {batches.length === 0 ? (
-          <TrashEmptyState
-            title="Thùng rác nhóm đang trống"
-            description="Không có tài liệu nào bị xóa trong nhóm này."
-          />
+          <TrashEmptyState />
         ) : (
           <>
             <div className="hidden overflow-x-auto md:block">
@@ -142,7 +137,6 @@ export default function TrashTab({ documents, groupId }: TrashTabProps) {
                         setExpandedBatchId((c) => (c === batch.id ? null : batch.id))
                       }
                       onRestore={() => restoreMutation.mutate(batch.docIds)}
-                      // Mở rộng tương lai: Có thể truyền renderExtraMeta để hiển thị Avatar người xóa trong nhóm
                     />
                   ))}
                 </tbody>
@@ -167,17 +161,17 @@ export default function TrashTab({ documents, groupId }: TrashTabProps) {
         )}
       </section>
 
+      {/* Tip Note */}
       <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3">
         <Star className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
         <p className="text-xs leading-5 text-green-700">
-          <span className="font-semibold">Mẹo:</span> Thành viên nhóm có thể khôi phục lại tài liệu đã xóa nếu cần thiết.
+          <span className="font-semibold">Mẹo:</span> Bạn có thể khôi phục cả gói
+          hoặc xem chi tiết từng tài liệu để chọn khôi phục riêng.
         </p>
       </div>
 
       <TrashConfirmModal
         isOpen={showEmptyConfirm}
-        title="Dọn sạch thùng rác nhóm?"
-        description="Tất cả tài liệu bị xóa trong nhóm này sẽ được xử lý. Bạn có chắc chắn muốn tiếp tục?"
         isLoading={emptyTrashMutation.isPending}
         onClose={() => setShowEmptyConfirm(false)}
         onConfirm={() => emptyTrashMutation.mutate()}
