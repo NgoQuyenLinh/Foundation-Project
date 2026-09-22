@@ -112,9 +112,10 @@ export function UploadModal({
       setError(null);
       let fileToUpload: File = files[0];
 
-      if (files[0].type.startsWith("image/")) {
+      // Chỉ gộp thành PDF khi có TỪ 2 ẢNH TRỞ LÊN
+      if (files[0].type.startsWith("image/") && files.length > 1) {
         setIsProcessingPdf(true);
-        const pdfName = (title.trim() || "Tai_Lieu_Anh").replace(/\s+/g, "_") + ".pdf";
+        const pdfName = (title.trim() || "Tai_Lieu_Anh_Gop").replace(/\s+/g, "_") + ".pdf";
         fileToUpload = await mergeImagesToPdf(files, pdfName);
         setIsProcessingPdf(false);
       }

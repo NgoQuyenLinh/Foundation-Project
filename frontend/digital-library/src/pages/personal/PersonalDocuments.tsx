@@ -6,7 +6,6 @@ import { usePersonalFolders } from "./hooks/usePersonalFolders";
 import { usePersonalDocuments } from "./hooks/usePersonalDocuments";
 
 // Components
-import { DocumentFilterBar } from "@/components/shared/DocumentFilterBar"; // Bổ sung import này
 import { DocumentTypeTabs } from "@/components/shared/DocumentTypeTabs";
 import { RenameDocumentModal } from "@/components/shared/RenameDocumentModal";
 import { CardSkeleton } from "@/components/shared/CardSkeleton";
@@ -18,6 +17,7 @@ import { PersonalFolderModalContainer } from "./components/PersonalFolderModalCo
 import { PersonalUploadModal } from "./components/PersonalUploadModal";
 import { DeleteFolderConfirmModal } from "./components/DeleteFolderConfirmModal";
 import { useHighlightElement } from "@/hooks/useHighlightElement";
+import { DocumentFilterBar } from "@/components/shared/DocumentFilterBar";
 
 export function PersonalDocuments() {
   // 1. Gọi Hook Folders
@@ -45,7 +45,7 @@ export function PersonalDocuments() {
 
   useHighlightElement("highlight_doc");
 
-  // 2. Gọi Hook Documents (Truyền selectedFolderId vào)
+  // 2. Gọi Hook Documents (Bổ sung lấy các state lọc thời gian)
   const {
     page,
     setPage,
@@ -70,6 +70,10 @@ export function PersonalDocuments() {
     setSelectedTagId,
     selectedFileType,
     setSelectedFileType,
+    selectedUploadTime,
+    setSelectedUploadTime,
+    selectedAccessTime,
+    setSelectedAccessTime,
     filteredDocuments: filteredDocCards,
     filteredFolders,
   } = usePersonalDocuments(selectedFolderId, folders);
@@ -87,7 +91,7 @@ export function PersonalDocuments() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* 4. SỬ DỤNG COMPONENT FILTER BAR DÙNG CHUNG */}
+      {/* 4. SỬ DỤNG COMPONENT FILTER BAR VỚI ĐẦY ĐỦ BỘ LỌC */}
       <DocumentFilterBar
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -97,6 +101,11 @@ export function PersonalDocuments() {
         fileTypes={fileTypes}
         selectedFileType={selectedFileType}
         setSelectedFileType={setSelectedFileType}
+        // Truyền state lọc thời gian vào Filter Bar
+        selectedUploadTime={selectedUploadTime}
+        setSelectedUploadTime={setSelectedUploadTime}
+        selectedAccessTime={selectedAccessTime}
+        setSelectedAccessTime={setSelectedAccessTime}
         onUploadClick={() => setIsUploadOpen(true)}
       />
 
@@ -106,7 +115,6 @@ export function PersonalDocuments() {
         folders={filteredFolders}
         foldersLoading={foldersLoading}
         selectedFolderId={selectedFolderId}
-        /* TỐI ƯU TOGGLE CHỌN / BỎ CHỌN THƯ MỤC */
         onSelectFolder={(id) => {
           setSelectedFolderId((prevId) => (prevId === id ? null : id));
           setPage(1);
@@ -197,7 +205,6 @@ export function PersonalDocuments() {
             setIsDeleteFolderOpen(false);
             setDeletingFolderId(null);
           }}
-          /* RESET BỎ LỌC NGAY KHI XÁC NHẬN XÓA THƯ MỤC ĐANG CHỌN */
           onConfirm={() => {
             if (deletingFolderId) {
               if (deletingFolderId === selectedFolderId) {

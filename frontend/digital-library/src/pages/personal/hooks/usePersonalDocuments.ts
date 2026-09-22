@@ -8,7 +8,37 @@ import { getFileExtension } from "@/utils/file";
 import { formatSize } from "@/utils/formatSize";
 import { formatRelativeDate } from "@/utils/formatDate";
 import type { FolderType } from "../components/PersonalFoldersSection";
-import type { TabKey } from "@/hooks/useDocumentFilters"; // Chỉ lấy type TabKey
+import type { TabKey } from "@/hooks/useDocumentFilters";
+
+// --- HÀM HỖ TRỢ KIỂM TRA THỜI GIAN (ĐẶT BÊN NGOÀI HOOK) ---
+const isWithinTimeRange = (dateStr?: string | null, filter?: string | null): boolean => {
+  if (!filter || !dateStr) return true;
+
+  const targetDate = new Date(dateStr);
+  if (isNaN(targetDate.getTime())) return true;
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  switch (filter) {
+    case "today":
+      return targetDate >= startOfToday;
+    case "last_7_days": {
+      const sevenDaysAgo = new Date(startOfToday);
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      return targetDate >= sevenDaysAgo;
+    }
+    case "last_30_days": {
+      const thirtyDaysAgo = new Date(startOfToday);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      return targetDate >= thirtyDaysAgo;
+    }
+    case "this_year":
+      return targetDate.getFullYear() === now.getFullYear();
+    default:
+      return true;
+  }
+};
 
 export function usePersonalDocuments(
   selectedFolderId: number | null,
@@ -17,11 +47,14 @@ export function usePersonalDocuments(
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // --- 1. STATES BỘ LỌC (Thay thế cho useDocumentFilters) ---
+  // --- 1. STATES BỘ LỌC ---
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [selectedFileType, setSelectedFileType] = useState<string | null>(null);
+
+  const [selectedUploadTime, setSelectedUploadTime] = useState<string | null>(null);
+  const [selectedAccessTime, setSelectedAccessTime] = useState<string | null>(null);
 
   // --- 2. STATES GIAO DIỆN & MODAL ---
   const [page, setPage] = useState(1);
@@ -108,6 +141,10 @@ export function usePersonalDocuments(
       rawType: doc.file_type,
       tags: doc.tags || [],
       folder_id: (doc as any).folder_id ?? null,
+
+      // LƯU CÁC MỐC THỜI GIAN ĐỂ PHỤC VỤ BỘ LỌC
+      created_at: doc.created_at,
+      last_accessed_at: (doc as any).last_accessed_at || (doc as any).updated_at || doc.created_at,
     }));
   }, [docData]);
 
@@ -120,7 +157,6 @@ export function usePersonalDocuments(
       query ? f.name.toLowerCase().includes(query) : true
     );
 
-    // Lấy Set chứa tag_ids & folder_ids của các thư mục khớp tên
     const matchedFolderTagIds = new Set(
       matchedFolders.flatMap((f) => (f.tags || []).map((t: any) => t.id ?? t.tag_id))
     );
@@ -128,7 +164,7 @@ export function usePersonalDocuments(
 
     // B. Lọc Tài liệu (Documents)
     const matchedDocs = allDocCards.filter((doc) => {
-      // 1. Lọc theo Tab Thư mục (Khi click vào 1 folder cụ thể)
+      // 1. Lọc theo Folder đang chọn
       if (selectedFolderId !== null) {
         const activeFolder = folders.find((f) => f.id === selectedFolderId);
         const folderTagIds = activeFolder?.tags?.map((t: any) => t.id ?? t.tag_id) || [];
@@ -163,25 +199,43 @@ export function usePersonalDocuments(
         } else if (activeTab === "image") {
           if (!fileType.startsWith("image/") && !["jpg", "jpeg", "png", "webp", "svg"].includes(ext)) return false;
         } else if (activeTab === "document") {
-          const isDoc = fileType.includes("word") || fileType.includes("presentation") || fileType.includes("spreadsheet") || ["doc", "docx", "ppt", "pptx", "xls", "xlsx", "txt"].includes(ext);
+          const isDoc =
+            fileType.includes("word") ||
+            fileType.includes("presentation") ||
+            fileType.includes("spreadsheet") ||
+            ["doc", "docx", "ppt", "pptx", "xls", "xlsx", "txt"].includes(ext);
           if (!isDoc) return false;
         } else if (activeTab === "other") {
-          const isKnown = fileType.includes("pdf") || fileType.startsWith("image/") || fileType.includes("word") || fileType.includes("presentation") || fileType.includes("spreadsheet") || ["pdf", "jpg", "jpeg", "png", "webp", "doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext);
+          const isKnown =
+            fileType.includes("pdf") ||
+            fileType.startsWith("image/") ||
+            fileType.includes("word") ||
+            fileType.includes("presentation") ||
+            fileType.includes("spreadsheet") ||
+            ["pdf", "jpg", "jpeg", "png", "webp", "doc", "docx", "ppt", "pptx", "xls", "xlsx"].includes(ext);
           if (isKnown) return false;
         }
       }
 
-      // 5. Lọc theo TÌM KIẾM ĐA TRƯỜNG (Instant Search)
+      // 5. Lọc theo THỜI GIAN TẢI LÊN (Upload Time)
+      if (!isWithinTimeRange(doc.created_at, selectedUploadTime)) {
+        return false;
+      }
+
+      // 6. Lọc theo THỜI GIAN TRUY CẬP (Access Time)
+      if (!isWithinTimeRange(doc.last_accessed_at, selectedAccessTime)) {
+        return false;
+      }
+
+      // 7. Lọc theo TÌM KIẾM ĐA TRƯỜNG (Instant Search)
       if (query) {
         const matchName = doc.name.toLowerCase().includes(query);
         const matchTag = doc.tags?.some((t: any) => t.name.toLowerCase().includes(query));
-        
-        // Tài liệu thuộc về Folder có tên khớp với từ khóa
+
         const matchFolder =
           (doc.folder_id && matchedFolderIds.has(doc.folder_id)) ||
           doc.tags?.some((t: any) => matchedFolderTagIds.has(t.id ?? t.tag_id));
 
-        // Phải thỏa mãn 1 trong 3 điều kiện: Tên tệp, Tên nhãn, hoặc nằm trong Thư mục khớp tên
         if (!matchName && !matchTag && !matchFolder) return false;
       }
 
@@ -192,7 +246,17 @@ export function usePersonalDocuments(
       filteredFolders: matchedFolders,
       filteredDocuments: matchedDocs,
     };
-  }, [allDocCards, folders, searchQuery, selectedTagId, selectedFileType, activeTab, selectedFolderId]);
+  }, [
+    allDocCards,
+    folders,
+    searchQuery,
+    selectedTagId,
+    selectedFileType,
+    activeTab,
+    selectedFolderId,
+    selectedUploadTime,
+    selectedAccessTime,
+  ]);
 
   return {
     // States
@@ -204,12 +268,17 @@ export function usePersonalDocuments(
     searchQuery, setSearchQuery,
     selectedTagId, setSelectedTagId,
     selectedFileType, setSelectedFileType,
-    
+
+    selectedUploadTime,
+    setSelectedUploadTime,
+    selectedAccessTime,
+    setSelectedAccessTime,
+
     // Data (Đã lọc)
     fileTypes, docData, docsLoading, isFetching,
-    filteredFolders, // <--- Xuất thêm mảng folders đã lọc
-    filteredDocuments, 
-    
+    filteredFolders,
+    filteredDocuments,
+
     // Actions
     deleteMutation, renameDocumentMutation, uploadMutation,
     handleDocumentAction,

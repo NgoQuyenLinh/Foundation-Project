@@ -4,13 +4,21 @@ import { Input } from "@/components/ui/Input";
 import { DynamicFilterDropdown } from "@/components/shared/DynamicFilterDropdown";
 import { Button } from "@/components/ui/Button";
 import { getNormalizedExtension } from "@/hooks/useDocumentFilters";
-import type { WorkspaceMember } from "@/types/group"; // Import type member của bạn
+import type { WorkspaceMember } from "@/types/group";
 
 export interface TagOption {
   id?: number;
   tag_id?: number;
   name: string;
 }
+
+// Khai báo các tùy chọn thời gian cố định
+export const TIME_FILTER_OPTIONS = [
+  { value: "today", label: "Hôm nay" },
+  { value: "last_7_days", label: "7 ngày qua" },
+  { value: "last_30_days", label: "30 ngày qua" },
+  { value: "this_year", label: "Năm nay" },
+];
 
 interface DocumentFilterBarProps {
   // Search
@@ -27,6 +35,12 @@ interface DocumentFilterBarProps {
   fileTypes: string[];
   selectedFileType: string | null;
   setSelectedFileType: (type: string | null) => void;
+
+  // Time Filters (Mới thêm)
+  selectedUploadTime?: string | null;
+  setSelectedUploadTime?: (time: string | null) => void;
+  selectedAccessTime?: string | null;
+  setSelectedAccessTime?: (time: string | null) => void;
 
   // Uploader Filter (Dành cho Group)
   members?: WorkspaceMember[];
@@ -48,6 +62,10 @@ export function DocumentFilterBar({
   fileTypes,
   selectedFileType,
   setSelectedFileType,
+  selectedUploadTime,
+  setSelectedUploadTime,
+  selectedAccessTime,
+  setSelectedAccessTime,
   members,
   selectedUploaderId,
   setSelectedUploaderId,
@@ -68,6 +86,17 @@ export function DocumentFilterBar({
 
       {/* Cụm Dropdown Lọc */}
       <div className="flex flex-wrap items-center gap-2">
+        {/* Lọc theo Loại tài liệu */}
+        <DynamicFilterDropdown
+          label="Loại tài liệu"
+          options={fileTypes.map((ft: string) => ({
+            value: ft,
+            label: getNormalizedExtension(ft).toUpperCase() || "Khác",
+          }))}
+          selectedValue={selectedFileType}
+          onChange={(val) => setSelectedFileType(val as string | null)}
+        />
+
         {/* Lọc theo Nhãn dán */}
         <DynamicFilterDropdown
           label="Nhãn dán"
@@ -79,18 +108,27 @@ export function DocumentFilterBar({
           onChange={(val) => setSelectedTagId(val as number | null)}
         />
 
-        {/* Lọc theo Định dạng */}
-        <DynamicFilterDropdown
-          label="Loại tài liệu"
-          options={fileTypes.map((ft: string) => ({
-            value: ft,
-            label: getNormalizedExtension(ft).toUpperCase() || "Khác",
-          }))}
-          selectedValue={selectedFileType}
-          onChange={(val) => setSelectedFileType(val as string | null)}
-        />
+        {/* Lọc theo Ngày sửa/tải lên */}
+        {setSelectedUploadTime && (
+          <DynamicFilterDropdown
+            label="Tải lên gần đây"
+            options={TIME_FILTER_OPTIONS}
+            selectedValue={selectedUploadTime ?? null}
+            onChange={(val) => setSelectedUploadTime(val as string | null)}
+          />
+        )}
 
-        {/* Lọc theo Người tải lên (Chỉ hiển thị khi có truyền prop members) */}
+        {/* Lọc theo Lần truy cập */}
+        {setSelectedAccessTime && (
+          <DynamicFilterDropdown
+            label="Mở gần đây"
+            options={TIME_FILTER_OPTIONS}
+            selectedValue={selectedAccessTime ?? null}
+            onChange={(val) => setSelectedAccessTime(val as string | null)}
+          />
+        )}
+
+        {/* Lọc theo Người tải lên */}
         {members && members.length > 0 && setSelectedUploaderId && (
           <DynamicFilterDropdown
             label="Người tải lên"
@@ -112,7 +150,7 @@ export function DocumentFilterBar({
             icon={<Upload className="h-4 w-4" />}
             onClick={onUploadClick}
           >
-            + Tải lên
+            Tải lên
           </Button>
         </div>
       )}
