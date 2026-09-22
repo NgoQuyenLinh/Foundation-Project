@@ -1,6 +1,6 @@
 // frontend/digital-library/src/pages/group/hooks/useGroupSpace.ts
 
-import { useEffect, useState, useMemo } from "react"; // 1. Bổ sung useMemo
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FolderAction } from "@/components/shared/FolderContextMenu";
@@ -15,6 +15,43 @@ import { useAuthStore } from "@/stores/authStore";
 import type { GroupListItem, PermissionLevel } from "@/types/group";
 import type { GroupTab } from "../types/groupSpace.types";
 import type { TabKey } from "@/hooks/useDocumentFilters";
+
+// HÀM BỔ TRỢ KIỂM TRA MỐC THỜI GIAN
+const isWithinTimeRange = (
+  dateStr?: string | null,
+  filter?: string | null,
+): boolean => {
+  if (!filter || !dateStr) return true;
+
+  const targetDate = new Date(dateStr);
+  if (isNaN(targetDate.getTime())) return true;
+
+  const now = new Date();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
+
+  switch (filter) {
+    case "today":
+      return targetDate >= startOfToday;
+    case "last_7_days": {
+      const sevenDaysAgo = new Date(startOfToday);
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      return targetDate >= sevenDaysAgo;
+    }
+    case "last_30_days": {
+      const thirtyDaysAgo = new Date(startOfToday);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      return targetDate >= thirtyDaysAgo;
+    }
+    case "this_year":
+      return targetDate.getFullYear() === now.getFullYear();
+    default:
+      return true;
+  }
+};
 
 export function useGroupSpace() {
   // 1. ROUTING & NAVIGATION
@@ -34,11 +71,26 @@ export function useGroupSpace() {
   const currentUser = useAuthStore((state) => state.user);
 
   // 3. LOCAL STATES & FILTERS
-  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null); // BỔ SUNG STATE SELECTED FOLDER
+  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(
+    null,
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
-  const [selectedFileType, setSelectedFileType] = useState<string | null>(null);
+  const [selectedFileType, setSelectedFileType] = useState<string | null>(
+    null,
+  );
   const [activeDocumentTab, setActiveDocumentTab] = useState<TabKey>("all");
+
+  // KHAI BÁO THÊM STATE BỘ LỌC THỜI GIAN & NGƯỜI TẢI LÊN
+  const [selectedUploadTime, setSelectedUploadTime] = useState<string | null>(
+    null,
+  );
+  const [selectedAccessTime, setSelectedAccessTime] = useState<string | null>(
+    null,
+  );
+  const [selectedUploaderId, setSelectedUploaderId] = useState<number | null>(
+    null,
+  );
 
   // Modals
   const [shareModal, setShareModal] = useState<
@@ -132,13 +184,14 @@ export function useGroupSpace() {
   const invitations = invitationsData;
   const groupTags = groupTagsData;
 
-   const groups = cachedGroups;
+  const groups = cachedGroups;
 
   const currentMember = members.find((m) => m.user_id === currentUser?.id);
   const isOwner =
     currentMember?.is_owner ??
     (!!workspace?.owner_id && workspace.owner_id === currentUser?.id);
-  const permission: PermissionLevel = currentMember?.permission_level ?? "view";
+  const permission: PermissionLevel =
+    currentMember?.permission_level ?? "view";
   const canManageDocuments = isOwner || permission === "full";
 
   // 6. TRASH QUERY
@@ -166,7 +219,7 @@ export function useGroupSpace() {
     }
   }, [folders, selectedFolderId]);
 
- // LỌC TÀI LIỆU CLIENT-SIDE
+  // LỌC TÀI LIỆU CLIENT-SIDE
   const filteredDocuments = useMemo(() => {
     let list = documents || [];
 
@@ -179,14 +232,14 @@ export function useGroupSpace() {
         [];
 
       if (folderTagIds.length > 0) {
-        // Trường hợp 1: Thư mục chứa Tag -> Lọc tài liệu theo Tag tương ứng
+        // Lọc tài liệu chứa tag thuộc folder
         list = list.filter((doc: any) =>
           doc.tags?.some((docTag: any) =>
-            folderTagIds.includes(docTag.id ?? docTag.tag_id)
-          )
+            folderTagIds.includes(docTag.id ?? docTag.tag_id),
+          ),
         );
       } else {
-        // Trường hợp 2: Lọc tài liệu liên kết trực tiếp qua ID thư mục
+        // Lọc tài liệu theo folder_id trực tiếp
         list = list.filter((doc: any) => {
           const docFolderId = doc.folder_id ?? doc.folderId ?? doc.folder?.id;
           return Number(docFolderId) === Number(selectedFolderId);
@@ -194,8 +247,9 @@ export function useGroupSpace() {
       }
     }
 
-    // B. Lọc tiếp theo các thuộc tính Search, TagDropdown, FileType, Tab
+    // B. Lọc tiếp theo các điều kiện
     return list.filter((doc: any) => {
+      // 1. Tìm kiếm theo tên
       const docName = doc.title || doc.name || "";
       if (
         searchQuery &&
@@ -204,6 +258,7 @@ export function useGroupSpace() {
         return false;
       }
 
+      // 2. Lọc theo Nhãn dán (Tag)
       if (selectedTagId !== null) {
         const hasTag = doc.tags?.some(
           (t: any) => t.id === selectedTagId || t.tag_id === selectedTagId,
@@ -211,11 +266,13 @@ export function useGroupSpace() {
         if (!hasTag) return false;
       }
 
+      // 3. Lọc theo Loại File Dropdown
       if (selectedFileType !== null) {
         const fileType = doc.file_type || doc.rawType;
         if (fileType !== selectedFileType) return false;
       }
 
+      // 4. Lọc theo Tab định dạng (PDF, Images, Docs...)
       if (activeDocumentTab !== "all") {
         const fileType = (doc.file_type || doc.rawType || "").toLowerCase();
         const ext = (doc.extension || "").toLowerCase();
@@ -259,6 +316,32 @@ export function useGroupSpace() {
         }
       }
 
+      // 5. Lọc theo Thời gian tải lên
+      const uploadDate = doc.created_at || doc.uploaded_at;
+      if (!isWithinTimeRange(uploadDate, selectedUploadTime)) {
+        return false;
+      }
+
+      // 6. Lọc theo Thời gian truy cập / cập nhật gần nhất
+      const accessDate = doc.last_accessed_at || doc.updated_at || doc.created_at;
+      if (!isWithinTimeRange(accessDate, selectedAccessTime)) {
+        return false;
+      }
+
+      // 7. Lọc theo Người tải lên
+      if (selectedUploaderId !== null) {
+        const uploaderId =
+          doc.uploader_id ??
+          doc.user_id ??
+          doc.created_by ??
+          doc.uploaded_by ??
+          doc.owner?.id ??
+          doc.owner_id;
+        if (Number(uploaderId) !== Number(selectedUploaderId)) {
+          return false;
+        }
+      }
+
       return true;
     });
   }, [
@@ -269,6 +352,9 @@ export function useGroupSpace() {
     selectedTagId,
     selectedFileType,
     activeDocumentTab,
+    selectedUploadTime,
+    selectedAccessTime,
+    selectedUploaderId,
   ]);
 
   // 7. EFFECTS & NAVIGATION GUARDS
@@ -367,7 +453,6 @@ export function useGroupSpace() {
 
     try {
       setIsDeletingFolder(true);
-      // RESET TRẠNG THÁI LỌC NẾU XÓA ĐÚNG THƯ MỤC ĐANG CHỌN
       if (deletingFolder.id === selectedFolderId) {
         setSelectedFolderId(null);
       }
@@ -413,7 +498,7 @@ export function useGroupSpace() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["group-folders", groupId] });
-      queryClient.invalidateQueries({ queryKey: ["group", groupId] }); 
+      queryClient.invalidateQueries({ queryKey: ["group", groupId] });
       setIsFolderModalOpen(false);
       setEditingFolder(null);
     },
@@ -434,7 +519,7 @@ export function useGroupSpace() {
         { name, color: "#e5e7eb" },
         groupId,
       );
-      
+
       queryClient.invalidateQueries({ queryKey: ["workspace-tags", groupId] });
 
       const realTagId = res.tag_id ?? res.tag?.id ?? res.id;
@@ -455,7 +540,7 @@ export function useGroupSpace() {
           color: data.color,
           tag_ids: data.tagIds,
         },
-        groupId
+        groupId,
       );
     },
     onSuccess: () => {
@@ -467,12 +552,12 @@ export function useGroupSpace() {
     mutationFn: async (data: { id: number; name: string; color?: string; tagIds?: number[] }) => {
       return groupFolderService.update(
         data.id,
-        { 
-          name: data.name, 
-          color: data.color, 
-          tag_ids: data.tagIds 
+        {
+          name: data.name,
+          color: data.color,
+          tag_ids: data.tagIds,
         },
-        groupId
+        groupId,
       );
     },
     onSuccess: () => {
@@ -485,9 +570,9 @@ export function useGroupSpace() {
     navigate,
     activeTab,
     queryClient,
-    selectedFolderId, // EXPOSE STATE
+    selectedFolderId,
     setSelectedFolderId,
-    handleSelectFolder, // EXPOSE TOGGLE FUNCTION
+    handleSelectFolder,
     searchQuery,
     setSearchQuery,
     selectedTagId,
@@ -496,6 +581,15 @@ export function useGroupSpace() {
     setSelectedFileType,
     activeDocumentTab,
     setActiveDocumentTab,
+
+    // TRẢ VỀ CÁC STATE VÀ SETTER MỚI
+    selectedUploadTime,
+    setSelectedUploadTime,
+    selectedAccessTime,
+    setSelectedAccessTime,
+    selectedUploaderId,
+    setSelectedUploaderId,
+
     shareModal,
     setShareModal,
     isFolderModalOpen,

@@ -85,6 +85,12 @@ export default function GroupSpace() {
     canManageDocuments,
     trash,
     filteredDocuments,
+    selectedUploadTime,
+    setSelectedUploadTime,
+    selectedAccessTime,
+    setSelectedAccessTime,
+    selectedUploaderId,
+    setSelectedUploaderId,
     saveDocument,
     deleteDocument,
     setTab,
@@ -140,19 +146,17 @@ export default function GroupSpace() {
     );
   }
 
-
   return (
-    
     <div className="flex flex-col gap-5 pb-70">
       <div>
-      <button
-        onClick={() => navigate("/groups/")}
-        className="group inline-flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
-        Quay lại danh sách nhóm
-      </button>
-    </div>
+        <button
+          onClick={() => navigate("/groups/")}
+          className="group inline-flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+          Quay lại danh sách nhóm
+        </button>
+      </div>
       <Card className="relative flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5">
         <GroupSwitcher
           currentGroup={workspace}
@@ -236,6 +240,14 @@ export default function GroupSpace() {
           fileTypes={fileTypes}
           selectedFileType={selectedFileType}
           setSelectedFileType={setSelectedFileType}
+          /* BỔ SUNG CÁC PROPS BỘ LỌC MỚI */
+          selectedUploadTime={selectedUploadTime}
+          setSelectedUploadTime={setSelectedUploadTime}
+          selectedAccessTime={selectedAccessTime}
+          setSelectedAccessTime={setSelectedAccessTime}
+          members={members}
+          selectedUploaderId={selectedUploaderId}
+          setSelectedUploaderId={setSelectedUploaderId}
           filteredDocuments={filteredDocuments}
           folders={folders}
           docsLoading={docsLoading}

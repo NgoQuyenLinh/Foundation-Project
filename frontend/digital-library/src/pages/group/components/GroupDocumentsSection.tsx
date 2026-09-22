@@ -6,7 +6,7 @@ import { DynamicFilterDropdown } from "@/components/shared/DynamicFilterDropdown
 import { DocumentTypeTabs } from "@/components/shared/DocumentTypeTabs";
 import { getNormalizedExtension, type TabKey } from "@/hooks/useDocumentFilters";
 import type { Document, Folder } from "@/types/document";
-import type { PermissionLevel } from "@/types/group";
+import type { PermissionLevel, WorkspaceMember } from "@/types/group";
 import type { FolderAction } from "@/components/shared/FolderContextMenu";
 import DocumentsTab from "./DocumentsTab";
 import type { DocumentAction } from "@/components/shared/DocumentContextMenu";
@@ -18,9 +18,17 @@ export interface WorkspaceTag {
   color?: string;
 }
 
+// Khai báo tùy chọn lọc thời gian cố định
+const TIME_FILTER_OPTIONS = [
+  { value: "today", label: "Hôm nay" },
+  { value: "last_7_days", label: "7 ngày qua" },
+  { value: "last_30_days", label: "30 ngày qua" },
+  { value: "this_year", label: "Năm nay" },
+];
+
 export interface GroupDocumentsSectionProps {
-  selectedFolderId?: number | null; // BỔ SUNG PROP
-  onSelectFolder?: (id: number | null) => void; // BỔ SUNG PROP
+  selectedFolderId?: number | null;
+  onSelectFolder?: (id: number | null) => void;
   activeDocumentTab: TabKey;
   setActiveDocumentTab: (tab: TabKey) => void;
   searchQuery: string;
@@ -31,6 +39,16 @@ export interface GroupDocumentsSectionProps {
   fileTypes: string[];
   selectedFileType: string | null;
   setSelectedFileType: (type: string | null) => void;
+
+  // BỔ SUNG PROPS BỘ LỌC THỜI GIAN & NGƯỜI TẢI LÊN
+  selectedUploadTime?: string | null;
+  setSelectedUploadTime?: (time: string | null) => void;
+  selectedAccessTime?: string | null;
+  setSelectedAccessTime?: (time: string | null) => void;
+  members?: WorkspaceMember[] | any[];
+  selectedUploaderId?: number | null;
+  setSelectedUploaderId?: (id: number | null) => void;
+
   filteredDocuments: Document[];
   folders: Folder[];
   docsLoading: boolean;
@@ -60,6 +78,13 @@ export function GroupDocumentsSection({
   fileTypes,
   selectedFileType,
   setSelectedFileType,
+  selectedUploadTime,
+  setSelectedUploadTime,
+  selectedAccessTime,
+  setSelectedAccessTime,
+  members = [],
+  selectedUploaderId,
+  setSelectedUploaderId,
   filteredDocuments,
   folders,
   docsLoading,
@@ -116,6 +141,44 @@ export function GroupDocumentsSection({
             selectedValue={selectedFileType}
             onChange={(val) => setSelectedFileType(val as string | null)}
           />
+
+          {/* Lọc theo Ngày tải lên */}
+          {setSelectedUploadTime && (
+            <DynamicFilterDropdown
+              label="Tải lên gần đây"
+              options={TIME_FILTER_OPTIONS}
+              selectedValue={selectedUploadTime ?? null}
+              onChange={(val) => setSelectedUploadTime(val as string | null)}
+            />
+          )}
+
+          {/* Lọc theo Lần mở gần nhất */}
+          {setSelectedAccessTime && (
+            <DynamicFilterDropdown
+              label="Mở gần đây"
+              options={TIME_FILTER_OPTIONS}
+              selectedValue={selectedAccessTime ?? null}
+              onChange={(val) => setSelectedAccessTime(val as string | null)}
+            />
+          )}
+
+          {/* Lọc theo Người tải lên (Thành viên nhóm) */}
+          {members && members.length > 0 && setSelectedUploaderId && (
+            <DynamicFilterDropdown
+              label="Người tải lên"
+              options={members.map((m: any) => ({
+                value: (m.user_id ?? m.id) as number,
+                label:
+                  m.full_name ||
+                  m.user?.full_name ||
+                  m.username ||
+                  m.user?.username ||
+                  `Thành viên #${m.user_id ?? m.id}`,
+              }))}
+              selectedValue={selectedUploaderId ?? null}
+              onChange={(val) => setSelectedUploaderId(val as number | null)}
+            />
+          )}
         </div>
       </div>
 
@@ -123,8 +186,8 @@ export function GroupDocumentsSection({
       <DocumentsTab
         documents={filteredDocuments}
         folders={folders}
-        selectedFolderId={selectedFolderId} 
-        onSelectFolder={onSelectFolder}     
+        selectedFolderId={selectedFolderId}
+        onSelectFolder={onSelectFolder}
         isLoading={docsLoading || foldersLoading}
         permission={permission}
         isOwner={isOwner}
