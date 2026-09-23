@@ -61,6 +61,8 @@ export function usePersonalDocuments(
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isRenameModalOpen, setIsRenameModalOpen] = useState(false);
   const [renamingDoc, setRenamingDoc] = useState<{ id: string; title: string } | null>(null);
+  const [isContributeModalOpen, setIsContributeModalOpen] = useState(false);
+  const [contributeDoc, setContributeDoc] = useState<{ id: number; title: string } | null>(null);
 
   // --- 3. QUERIES ---
   const { data: fileTypes = [] } = useQuery({
@@ -118,6 +120,12 @@ export function usePersonalDocuments(
       if (docToRename) {
         setRenamingDoc({ id: docToRename.id.toString(), title: docToRename.title });
         setIsRenameModalOpen(true);
+      }
+    } else if (action === "contribute") {
+      const docToContribute = docData?.items.find((d) => d.id.toString() === documentId);
+      if (docToContribute) {
+        setContributeDoc({ id: docToContribute.id, title: docToContribute.title });
+        setIsContributeModalOpen(true);
       }
     } else if (action === "delete") {
       if (window.confirm("Xóa tài liệu này? Bạn có thể khôi phục trong thùng rác.")) {
@@ -264,6 +272,8 @@ export function usePersonalDocuments(
     isUploadOpen, setIsUploadOpen,
     isRenameModalOpen, setIsRenameModalOpen,
     renamingDoc, setRenamingDoc,
+    isContributeModalOpen, setIsContributeModalOpen,
+    contributeDoc, setContributeDoc,
     activeTab, setActiveTab,
     searchQuery, setSearchQuery,
     selectedTagId, setSelectedTagId,

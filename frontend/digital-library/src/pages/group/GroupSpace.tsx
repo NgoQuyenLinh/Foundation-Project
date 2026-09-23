@@ -1,12 +1,9 @@
-// frontend/digital-library/src/pages/group/GroupSpace.tsx
-
 import {
   FileBox,
   FilePlus,
   FolderUp,
-  Search,
   Upload,
-  Users,
+  ArrowLeft,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
@@ -37,9 +34,6 @@ import { GroupUploadModal } from "./components/GroupUploadModal";
 import { GroupDocumentsSection } from "./components/GroupDocumentsSection";
 import { CreateFolderModal } from "@/components/shared/CreateFolderModal";
 import { useHighlightElement } from "@/hooks/useHighlightElement";
-
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
 
 import GroupSwitcher from "./components/GroupSwitcher";
 
@@ -104,9 +98,7 @@ export default function GroupSpace() {
     handleRenameDocument,
     uploadMutation,
     createTagMutation,
-    handleFolderSubmit,
     handleCreateGroupTag,
-    isSubmittingFolder,
     createFolderMutation,
     updateFolderMutation,
     selectedFolderId,

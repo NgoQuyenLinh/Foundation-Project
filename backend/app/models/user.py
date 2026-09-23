@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from .favorite import Favorite
     from .download_log import DownloadLog
     from .document_version import DocumentVersion
+    from .document_rating import DocumentRating
 
 
 class User(Base, TimestampMixin):
@@ -70,6 +71,9 @@ class User(Base, TimestampMixin):
     )
     uploaded_versions: Mapped[List["DocumentVersion"]] = relationship(
         "DocumentVersion", back_populates="uploader"
+    )
+    ratings: Mapped[List["DocumentRating"]] = relationship(
+        "DocumentRating", back_populates="user"
     )
 
     # ── Workspace / Nhóm ──────────────────────────────────────────

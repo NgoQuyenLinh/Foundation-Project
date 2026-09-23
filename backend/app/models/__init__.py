@@ -20,6 +20,9 @@ from .download_log import DownloadLog
 from .processing_job import ProcessingJob
 from .folder import Folder
 from .folder_tag import FolderTag
+from .subject import Subject
+from .community_submission import CommunitySubmission
+from .document_rating import DocumentRating
 
 
 __all__ = [
@@ -45,4 +48,7 @@ __all__ = [
     "ProcessingJob",
     "Folder",
     "FolderTag",
+    "Subject",
+    "CommunitySubmission",
+    "DocumentRating",
 ]

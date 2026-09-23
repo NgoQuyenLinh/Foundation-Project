@@ -34,6 +34,7 @@ const SCOPE_ITEMS: SidebarItem[] = [
   { icon: BookOpen, label: "Lớp", to: "/class" },
   { icon: GraduationCap, label: "Khoa", to: "/faculty" },
   { icon: Building2, label: "Trường", to: "/school" },
+  { icon: BookOpen, label: "Kho học liệu", to: "/library" },
 ];
 
 const PERSONAL_ITEMS: SidebarItem[] = [

@@ -1,5 +1,4 @@
-import { Check, Trash2, CheckCircle, XCircle, Users, FileUp, Share2 } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
+import { Check, Trash2, CheckCircle, Users, FileUp, Share2 } from 'lucide-react'
 import type { Notification } from '@/types/notification'
 import { cn } from '@/utils/cn'
 

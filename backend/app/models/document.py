@@ -14,6 +14,8 @@ if TYPE_CHECKING:
     from .document_version import DocumentVersion
     from .note import Note
     from .trash_batch import TrashBatch
+    from .subject import Subject
+    from .document_rating import DocumentRating
 
 class Document(Base, TimestampMixin):
     __tablename__ = "documents"
@@ -27,6 +29,8 @@ class Document(Base, TimestampMixin):
     workspace_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("workspaces.id"))
     category_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("categories.id"))
     source_document_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("documents.id"))
+    subject_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("subjects.id"), nullable=True)
+    is_public: Mapped[bool] = mapped_column(Boolean, default=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
     file_path: Mapped[str] = mapped_column(String(1024), nullable=False)
@@ -47,15 +51,14 @@ class Document(Base, TimestampMixin):
     trash_batch_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("trash_batches.id"))
 
     # Relationships
-    owner: Mapped["User"] = relationship("User", back_populates="documents",lazy="selectin")
+    owner: Mapped["User"] = relationship("User", back_populates="documents", lazy="selectin")
     workspace: Mapped[Optional["Workspace"]] = relationship("Workspace", back_populates="documents")
     category: Mapped[Optional["Category"]] = relationship("Category", back_populates="documents")
+    subject: Mapped[Optional["Subject"]] = relationship("Subject", back_populates="documents", lazy="selectin")
     source_document: Mapped[Optional["Document"]] = relationship("Document", remote_side=[id], back_populates="derived_documents")
     derived_documents: Mapped[List["Document"]] = relationship("Document", back_populates="source_document")
-    tags: Mapped[List["Tag"]] = relationship("Tag", secondary="document_tags", back_populates="documents",lazy="selectin",)
+    tags: Mapped[List["Tag"]] = relationship("Tag", secondary="document_tags", back_populates="documents", lazy="selectin")
     versions: Mapped[List["DocumentVersion"]] = relationship("DocumentVersion", back_populates="document")
     notes: Mapped[List["Note"]] = relationship("Note", back_populates="document")
     trash_batch: Mapped[Optional["TrashBatch"]] = relationship("TrashBatch", back_populates="documents")
-    workspace: Mapped[Optional["Workspace"]] = relationship(
-    "Workspace", back_populates="documents"
-)
+    ratings: Mapped[List["DocumentRating"]] = relationship("DocumentRating", back_populates="document", cascade="all, delete-orphan", lazy="selectin")

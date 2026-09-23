@@ -8,6 +8,7 @@ import { usePersonalDocuments } from "./hooks/usePersonalDocuments";
 // Components
 import { DocumentTypeTabs } from "@/components/shared/DocumentTypeTabs";
 import { RenameDocumentModal } from "@/components/shared/RenameDocumentModal";
+import { ContributeModal } from "@/components/shared/ContributeModal";
 import { CardSkeleton } from "@/components/shared/CardSkeleton";
 
 // Sub-sections & Modals
@@ -54,7 +55,10 @@ export function PersonalDocuments() {
     isRenameModalOpen,
     setIsRenameModalOpen,
     renamingDoc,
-    setRenamingDoc,
+    isContributeModalOpen,
+    setIsContributeModalOpen,
+    contributeDoc,
+    setContributeDoc,
     fileTypes,
     docData,
     docsLoading,
@@ -194,6 +198,17 @@ export function PersonalDocuments() {
           tags={tags}
           createTagMutation={createTagMutation}
           uploadMutation={uploadMutation}
+        />
+      )}
+
+      {isContributeModalOpen && contributeDoc && (
+        <ContributeModal
+          documentId={contributeDoc.id}
+          documentTitle={contributeDoc.title}
+          onClose={() => {
+            setIsContributeModalOpen(false);
+            setContributeDoc(null);
+          }}
         />
       )}
 

@@ -1,5 +1,4 @@
 import { ChevronDown, ChevronRight, FileText, RotateCcw } from "lucide-react";
-import { cn } from "@/utils/cn";
 import { getTrashSourceLabel } from "@/utils/trashUtils";
 import type { TrashBatch } from "@/types/trash";
 

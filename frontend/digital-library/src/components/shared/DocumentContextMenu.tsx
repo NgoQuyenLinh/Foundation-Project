@@ -9,9 +9,11 @@ import {
   FolderInput, 
   Trash2,
   MoreVertical,
-  ExternalLink 
+  ExternalLink,
+  Upload 
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useAuthStore } from "@/stores/authStore";
 
 export type DocumentAction = 
   | "view" 
@@ -21,6 +23,7 @@ export type DocumentAction =
   | "rename" 
   | "move" 
   | "delete"
+  | "contribute"
   | "save-to-personal"
   | string;
 
@@ -39,6 +42,7 @@ export interface DocumentContextMenuProps {
 }
 
 export function DocumentContextMenu({ onAction, allowedActions, extraItems = [] }: DocumentContextMenuProps) {
+  const { isAuthenticated } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; right: number }>({
     top: 0,
@@ -100,6 +104,15 @@ export function DocumentContextMenu({ onAction, allowedActions, extraItems = [] 
     { action: "rename", icon: <Edit2 className="h-4 w-4" />, label: "Đổi tên" },
     { action: "move", icon: <FolderInput className="h-4 w-4" />, label: "Di chuyển" },
     { action: "delete", icon: <Trash2 className="h-4 w-4" />, label: "Xóa", danger: true },
+    ...(isAuthenticated
+      ? [
+          {
+            action: "contribute",
+            icon: <Upload className="h-4 w-4 text-primary-600" />,
+            label: "Đóng góp vào kho học liệu",
+          },
+        ]
+      : []),
   ];
 
   let displayItems = DEFAULT_ITEMS;
@@ -134,14 +147,17 @@ export function DocumentContextMenu({ onAction, allowedActions, extraItems = [] 
               top: `${coords.top}px`,
               right: `${coords.right}px`,
             }}
-            className="z-[9999] min-w-[180px] rounded-xl border border-gray-100 bg-white p-1.5 shadow-lg animate-in fade-in zoom-in-95"
+            className="z-[9999] min-w-[190px] rounded-xl border border-gray-100 bg-white p-1.5 shadow-lg animate-in fade-in zoom-in-95"
             onClick={(e) => e.stopPropagation()}
           >
             {displayItems.map((item, index) => {
               const isDanger = item.danger;
+              const isContribute = item.action === "contribute";
               return (
                 <div key={item.action}>
-                  {isDanger && index > 0 && <div className="my-1 h-px bg-gray-100" />}
+                  {((isDanger && index > 0) || (isContribute && index > 0)) && (
+                    <div className="my-1 h-px bg-gray-100" />
+                  )}
                   <button
                     type="button"
                     onClick={(e) => {
@@ -156,6 +172,8 @@ export function DocumentContextMenu({ onAction, allowedActions, extraItems = [] 
                     className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
                       isDanger
                         ? "text-red-600 hover:bg-red-50"
+                        : isContribute
+                        ? "text-primary-700 hover:bg-primary-50"
                         : "text-gray-700 hover:bg-gray-100"
                     }`}
                   >

@@ -1,6 +1,6 @@
 // frontend/digital-library/src/components/shared/Header.tsx
 
-import { Search, Bell, Menu, LogOut } from "lucide-react";
+import { Bell, Menu, LogOut } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';

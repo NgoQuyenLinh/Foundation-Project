@@ -98,7 +98,7 @@ export function GroupDocumentsSection({
   setEditingFolder,
   setIsFolderModalOpen,
   handleFolderAction,
-  onDocumentAction,
+  onDocumentAction: _onDocumentAction,
 }: GroupDocumentsSectionProps) {
   return (
     <div className="flex flex-col gap-4">

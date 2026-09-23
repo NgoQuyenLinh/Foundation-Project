@@ -29,6 +29,13 @@ import StatsPage from "@/pages/stats/StatsPage";
 import SettingsPage from "@/pages/settings/SettingsPage";
 import { SearchPage } from "@/pages/search/SearchPage";
 
+// Pages - Community Library (Kho học liệu)
+import LibraryHome from "@/pages/library/LibraryHome";
+import LibraryFaculty from "@/pages/library/LibraryFaculty";
+import LibrarySubject from "@/pages/library/LibrarySubject";
+import LibraryDocumentDetail from "@/pages/library/LibraryDocumentDetail";
+import LibraryAdminSubmissions from "@/pages/library/admin/LibraryAdminSubmissions";
+
 // Shared Components
 import { DocumentDetail } from "@/components/shared/DocumentDetail";
 
@@ -57,10 +64,16 @@ function AppRoutes() {
 
   return (
     <Routes>
-      {/* Public routes */}
+      {/* Public routes - Auth */}
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<LoginPage />} />
       </Route>
+
+      {/* Public routes - Community Library (Kho học liệu mở) */}
+      <Route path="/library" element={<LibraryHome />} />
+      <Route path="/library/faculty/:facultyId" element={<LibraryFaculty />} />
+      <Route path="/library/subject/:subjectId" element={<LibrarySubject />} />
+      <Route path="/library/document/:documentId" element={<LibraryDocumentDetail />} />
 
       {/* Protected routes — Bắt buộc đăng nhập */}
       <Route element={<ProtectedRoute />}>
@@ -98,12 +111,13 @@ function AppRoutes() {
           >
             <Route path="/faculty" element={<FacultySpace />} />
             <Route path="/school" element={<SchoolSpace />} />
+            <Route path="/library/admin/submissions" element={<LibraryAdminSubmissions />} />
           </Route>
         </Route>
       </Route>
 
       {/* Fallback & Redirects */}
-      <Route path="/" element={<Navigate to="/personal" replace />} />
+      <Route path="/" element={<Navigate to="/library" replace />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   );

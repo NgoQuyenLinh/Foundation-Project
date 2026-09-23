@@ -30,9 +30,9 @@ interface DocumentBrowserProps {
 
 export function DocumentBrowser({
   workspace,
-  showSaveToPersonal = false,
+  showSaveToPersonal: _showSaveToPersonal = false,
   onDocumentAction,
-  navigationPath,
+  navigationPath: _navigationPath,
   UploadModalComponent,
   CreateFolderModalComponent,
 }: DocumentBrowserProps) {
@@ -202,8 +202,6 @@ export function DocumentBrowser({
                 key={doc.id}
                 document={doc}
                 onAction={handleDocumentAction}
-                navigationPath={navigationPath}
-                showSaveToPersonal={showSaveToPersonal}
               />
             ))
           ) : (

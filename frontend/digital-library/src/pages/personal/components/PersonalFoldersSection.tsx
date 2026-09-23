@@ -1,6 +1,6 @@
 // src/pages/personal/components/PersonalFoldersSection.tsx
 
-import { FolderOpen, FolderPlus, Plus } from "lucide-react";
+import { FolderOpen, Plus } from "lucide-react";
 import { FolderCard } from "@/components/shared/FolderCard";
 import { type FolderAction } from "@/components/shared/FolderContextMenu";
 import { cn } from "@/utils/cn";

@@ -42,7 +42,13 @@ export function LoginPage() {
   // Nếu đã đăng nhập thì redirect ngay
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/personal', { replace: true });
+      const redirect = sessionStorage.getItem('redirect_after_login');
+      if (redirect) {
+        sessionStorage.removeItem('redirect_after_login');
+        navigate(redirect, { replace: true });
+      } else {
+        navigate('/personal', { replace: true });
+      }
     }
   }, [isAuthenticated, navigate]);
 
@@ -70,7 +76,13 @@ export function LoginPage() {
     try {
       const data = await authService.login({ identifier, password });
       setAuth(data.access_token, data.user);
-      navigate(roleRoutes[data.user.role] ?? '/personal', { replace: true });
+      const redirect = sessionStorage.getItem('redirect_after_login');
+      if (redirect) {
+        sessionStorage.removeItem('redirect_after_login');
+        navigate(redirect, { replace: true });
+      } else {
+        navigate(roleRoutes[data.user.role] ?? '/personal', { replace: true });
+      }
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
         const status = err.response?.status;
