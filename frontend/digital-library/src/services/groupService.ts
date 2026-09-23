@@ -43,6 +43,15 @@ export const groupService = {
       headers: { "Content-Type": "multipart/form-data" },
     }).then((r) => r.data),
 
+  uploadBatchDocuments: (groupId: number, formData: FormData) =>
+    api.post<Document>(`/groups/${groupId}/documents/upload-batch`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(r => r.data),
+
+  getBundleChildren: (groupId: number, bundleId: number) =>
+    api.get<Document[]>(`/groups/${groupId}/documents/${bundleId}/children`)
+      .then(r => r.data),
+
   shareDocuments: (id: number, documentIds: number[]) =>
     api.post(`/groups/${id}/share/documents`, { document_ids: documentIds }).then((r) => r.data),
 

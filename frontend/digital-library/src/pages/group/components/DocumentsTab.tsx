@@ -9,6 +9,7 @@ import { FolderCard } from "@/components/shared/FolderCard";
 import { type FolderAction } from "@/components/shared/FolderContextMenu";
 import { useDocumentFilters } from "@/hooks/useDocumentFilters";
 import { groupTagService } from "@/services/tagService";
+import { groupDocumentService } from "@/services/documentService";
 import LocalGroupDocumentCard from "./LocalGroupDocumentCard";
 import { ViewToggle, type ViewMode } from "@/components/shared/ViewToggle";
 import { DocumentListView, type DocumentListItem } from "@/components/shared/DocumentListView";
@@ -240,6 +241,21 @@ export default function DocumentsTab({
               permission={effectivePermission}
               navigationPath={(docId) => `/groups/${groupId}/documents/${docId}`}
               onAction={(action, docId) => handleDocumentAction(action, docId)}
+              onToggleBundle={async (bundleId) => {
+                const children = await groupDocumentService.getBundleChildren(groupId, Number(bundleId));
+                return children.map(c => ({
+                  id: String(c.id),
+                  title: c.title,
+                  type: c.file_type || 'file',
+                  updatedAt: c.updated_at || c.created_at,
+                  size: c.file_size,
+                  thumbnail_path: c.thumbnail_path,
+                  owner: c.owner ? { full_name: c.owner.full_name || c.owner.username } : undefined,
+                  tags: c.tags,
+                  workspace_type: 'group',
+                  is_bundle: false,
+                }));
+              }}
             />
           )
         ) : (

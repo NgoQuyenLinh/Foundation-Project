@@ -15,6 +15,7 @@ import { PersonalDocuments } from "@/pages/personal/PersonalDocuments";
 import SharedWithMe from "@/pages/personal/SharedWithMe";
 import FavoritesPage from "@/pages/personal/FavoritesPage";
 import TrashPage from "@/pages/personal/TrashPage";
+import BundleDetailPage from "@/pages/personal/BundleDetailPage";
 
 // Pages - Group
 import GroupList from "@/pages/group/GroupList";
@@ -83,6 +84,7 @@ function AppRoutes() {
           <Route path="/personal/dashboard" element={<PersonalDashboard />} />
           <Route path="/personal/documents" element={<PersonalDocuments />} />
           <Route path="/personal/documents/:id" element={<DocumentDetail />} />
+          <Route path="/personal/bundle/:id" element={<BundleDetailPage />} />
           <Route path="/personal/shared" element={<SharedWithMe />} />
           <Route path="/personal/favorites" element={<FavoritesPage />} />
           <Route path="/personal/trash" element={<TrashPage />} />
@@ -93,6 +95,14 @@ function AppRoutes() {
           <Route
             path="/groups/:id/documents/:docId"
             element={<GroupDocumentDetailPage />}
+          />
+          <Route
+            path="/groups/:groupId/bundle/:id"
+            element={<BundleDetailPage />}
+          />
+          <Route
+            path="/groups/:id/bundle/:docId"
+            element={<BundleDetailPage />}
           />
 
           {/* Section: Class & Search */}

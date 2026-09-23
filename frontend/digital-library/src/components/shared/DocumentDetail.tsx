@@ -4,7 +4,7 @@
 // 1. IMPORTS
 // ==========================================
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Navigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -289,7 +289,7 @@ export function DocumentDetail(props: SharedDocumentDetailProps = {}) {
   const canDelete = permissions.canDelete ?? true;
   const canManageTags = permissions.canManageTags ?? true;
 
-  const params = useParams<{ id: string }>();
+  const params = useParams<{ id?: string; docId?: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -565,6 +565,15 @@ export function DocumentDetail(props: SharedDocumentDetailProps = {}) {
         </button>
       </div>
     );
+  }
+
+  // Nếu đây là gói tài liệu (bundle), tự động điều hướng sang BundleDetailPage
+  if (doc.is_bundle) {
+    const isGroup = !!(params.id && params.docId);
+    const targetUrl = isGroup
+      ? `/groups/${params.id}/bundle/${doc.id}`
+      : `/personal/bundle/${doc.id}`;
+    return <Navigate to={targetUrl} replace />;
   }
 
   // --- DATA MAPPING ---

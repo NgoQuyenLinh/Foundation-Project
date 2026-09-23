@@ -149,6 +149,9 @@ export function usePersonalDocuments(
       rawType: doc.file_type,
       tags: doc.tags || [],
       folder_id: (doc as any).folder_id ?? null,
+      is_bundle: doc.is_bundle,
+      bundle_parent_id: doc.bundle_parent_id,
+      bundle_children_count: doc.bundle_children_count,
 
       // LƯU CÁC MỐC THỜI GIAN ĐỂ PHỤC VỤ BỘ LỌC
       created_at: doc.created_at,

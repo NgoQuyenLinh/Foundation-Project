@@ -28,6 +28,38 @@ export const createDocumentService = (getBaseUrl: (groupId?: number | string) =>
       }
     }).then(r => r.data),
 
+  uploadBatch: (formData: FormData, groupId?: number | string) =>
+    api.post<Document>(`${getBaseUrl(groupId)}/upload-batch`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    }).then(r => r.data),
+
+  getBundleChildren: (bundleId: number, groupId?: number | string) =>
+    api.get<Document[]>(`${getBaseUrl(groupId)}/${bundleId}/children`).then(r => r.data),
+
+  /** Phase 4.1 — Thêm file mới vào bundle */
+  addFilesToBundle: (bundleId: number, formData: FormData, groupId?: number | string) =>
+    api.post<Document[]>(`${getBaseUrl(groupId)}/${bundleId}/add-files`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(r => r.data),
+
+  /** Phase 4.1b — Gán tài liệu cá nhân sẵn có vào bundle */
+  addFromPersonal: (bundleId: number, documentIds: number[]) =>
+    api.post<{ added_count: number }>(`/documents/${bundleId}/add-from-personal`, {
+      document_ids: documentIds,
+    }).then(r => r.data),
+
+  /** Phase 5 — Tải bundle dưới dạng ZIP */
+  downloadZip: (bundleId: number) => {
+    const url = `${api.defaults.baseURL ?? ''}/documents/${bundleId}/download-zip`
+    window.open(url, '_blank')
+  },
+
+  /** Phase 6 — Tách tài liệu khỏi bundle (giữ lại trong kho cá nhân) */
+  removeFromBundle: (docId: number) =>
+    api.post<{ success: boolean }>(`/documents/${docId}/remove-from-bundle`).then(r => r.data),
+
   update: (id: number, payload: Partial<Document>, groupId?: number | string) =>
     api.patch<Document>(
       `${getBaseUrl(groupId)}/${id}`,

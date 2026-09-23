@@ -227,6 +227,17 @@ async def share_folder_to_group(
 
 
 async def mark_group_document_deleted(db: AsyncSession, document: Document) -> None:
+    now = datetime.utcnow()
     document.is_deleted = True
-    document.deleted_at = datetime.utcnow()
+    document.deleted_at = now
+    if document.is_bundle:
+        children_result = await db.execute(
+            select(Document).where(
+                Document.bundle_parent_id == document.id,
+                Document.is_deleted == False
+            )
+        )
+        for child in children_result.scalars().all():
+            child.is_deleted = True
+            child.deleted_at = now
     await db.commit()

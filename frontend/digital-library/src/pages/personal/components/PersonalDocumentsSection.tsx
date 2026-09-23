@@ -12,6 +12,7 @@ import {
 import { ViewToggle, type ViewMode } from "@/components/shared/ViewToggle";
 import EmptyState from "@/components/shared/EmptyState";
 import { cn } from "@/utils/cn";
+import { documentService } from "@/services/documentService";
 
 export interface DocCardType {
   id: string;
@@ -25,6 +26,9 @@ export interface DocCardType {
   owner?: { name: string; avatar: string };
   rawType?: string | null;
   tags?: any[];
+  is_bundle?: boolean;
+  bundle_parent_id?: number | null;
+  bundle_children_count?: number | null;
 }
 
 interface PersonalDocumentsSectionProps {
@@ -79,6 +83,9 @@ function toListItem(doc: DocCardType): DocumentListItem {
     owner: doc.owner ? { full_name: doc.owner.name } : undefined,
     tags: doc.tags,
     workspace_type: "personal",
+    is_bundle: doc.is_bundle,
+    bundle_parent_id: doc.bundle_parent_id,
+    bundle_children_count: doc.bundle_children_count,
   };
 }
 
@@ -146,6 +153,20 @@ export function PersonalDocumentsSection({
             onAction={(action, docId) =>
               onDocumentAction(action, String(docId))
             }
+            onToggleBundle={async (bundleId) => {
+              const children = await documentService.getBundleChildren(Number(bundleId));
+              return children.map(c => ({
+                id: String(c.id),
+                title: c.title,
+                type: c.file_type || 'file',
+                updatedAt: c.updated_at || c.created_at,
+                size: c.file_size,
+                thumbnail_path: c.thumbnail_path,
+                tags: c.tags,
+                workspace_type: 'personal',
+                is_bundle: false,
+              }));
+            }}
           />
         </div>
       )}

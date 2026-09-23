@@ -50,6 +50,9 @@ export interface Document {
   trash_source?: "personal" | "group_orphaned" | string | null;
   trash_group_name?: string | null;
   owner?: DocumentOwner | null; // <-- Thuộc tính mới bổ sung
+  is_bundle?: boolean;
+  bundle_parent_id?: number | null;
+  bundle_children_count?: number | null;
 }
 
 export interface PaginatedDocuments {

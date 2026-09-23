@@ -59,6 +59,9 @@ class DocumentOut(DocumentBase):
     trash_source: Optional[str] = None
     trash_group_name: Optional[str] = None
     trash_batch_id: Optional[int] = None
+    is_bundle: bool = False
+    bundle_parent_id: Optional[int] = None
+    bundle_children_count: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     tags: list[TagOut] = Field(default_factory=list)

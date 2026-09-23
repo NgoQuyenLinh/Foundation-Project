@@ -49,14 +49,54 @@ class Document(Base, TimestampMixin):
     trash_source: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     trash_group_name: Mapped[Optional[str]] = mapped_column(String(150), nullable=True)
     trash_batch_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("trash_batches.id"))
+    is_bundle: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    bundle_parent_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True
+    )
 
     # Relationships
     owner: Mapped["User"] = relationship("User", back_populates="documents", lazy="selectin")
     workspace: Mapped[Optional["Workspace"]] = relationship("Workspace", back_populates="documents")
     category: Mapped[Optional["Category"]] = relationship("Category", back_populates="documents")
     subject: Mapped[Optional["Subject"]] = relationship("Subject", back_populates="documents", lazy="selectin")
-    source_document: Mapped[Optional["Document"]] = relationship("Document", remote_side=[id], back_populates="derived_documents")
-    derived_documents: Mapped[List["Document"]] = relationship("Document", back_populates="source_document")
+
+    # 1. source_document & derived_documents
+    source_document: Mapped[Optional["Document"]] = relationship(
+        "Document",
+        foreign_keys="[Document.source_document_id]",
+        primaryjoin="Document.source_document_id == Document.id",
+        remote_side="Document.id",
+        back_populates="derived_documents",
+    )
+    derived_documents: Mapped[List["Document"]] = relationship(
+        "Document",
+        foreign_keys="[Document.source_document_id]",
+        primaryjoin="Document.source_document_id == Document.id",
+        back_populates="source_document",
+    )
+
+    # 2. bundle_parent & bundle_children
+    bundle_parent: Mapped[Optional["Document"]] = relationship(
+        "Document",
+        foreign_keys="[Document.bundle_parent_id]",
+        primaryjoin="Document.bundle_parent_id == Document.id",
+        remote_side="Document.id",
+        back_populates="bundle_children",
+    )
+    bundle_children: Mapped[List["Document"]] = relationship(
+        "Document",
+        foreign_keys="[Document.bundle_parent_id]",
+        primaryjoin="Document.bundle_parent_id == Document.id",
+        back_populates="bundle_parent",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+
     tags: Mapped[List["Tag"]] = relationship("Tag", secondary="document_tags", back_populates="documents", lazy="selectin")
     versions: Mapped[List["DocumentVersion"]] = relationship("DocumentVersion", back_populates="document")
     notes: Mapped[List["Note"]] = relationship("Note", back_populates="document")

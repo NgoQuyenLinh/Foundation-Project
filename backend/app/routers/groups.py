@@ -204,6 +204,10 @@ async def dissolve_group(
     return {"message": "Nhóm sẽ bị giải tán sau 24 giờ"}
 
 
+import hashlib
+import os
+import uuid
+
 @router.get("/groups/{group_id}/documents/", response_model=PaginatedDocuments)
 async def list_group_documents(
     group_id: int,
@@ -217,8 +221,12 @@ async def list_group_documents(
     offset = (page - 1) * page_size
     query = (
         select(Document)
-        .options(selectinload(Document.tags))
-        .where(Document.workspace_id == group_id, Document.is_deleted == False)
+        .options(selectinload(Document.tags), selectinload(Document.owner))
+        .where(
+            Document.workspace_id == group_id,
+            Document.is_deleted == False,
+            Document.bundle_parent_id.is_(None),
+        )
     )
     if folder_id is not None:
         folder = await db.get(Folder, folder_id)
@@ -234,8 +242,27 @@ async def list_group_documents(
     count_result = await db.execute(select(func.count()).select_from(query.subquery()))
     total = count_result.scalar() or 0
     result = await db.execute(query.order_by(Document.created_at.desc()).offset(offset).limit(page_size))
+    items = result.scalars().all()
+
+    bundle_ids = [d.id for d in items if d.is_bundle]
+    counts_map = {}
+    if bundle_ids:
+        counts_res = await db.execute(
+            select(Document.bundle_parent_id, func.count(Document.id))
+            .where(Document.bundle_parent_id.in_(bundle_ids), Document.is_deleted == False)
+            .group_by(Document.bundle_parent_id)
+        )
+        counts_map = dict(counts_res.all())
+
+    items_out = []
+    for doc in items:
+        doc_out = DocumentOut.model_validate(doc)
+        if doc.is_bundle:
+            doc_out.bundle_children_count = counts_map.get(doc.id, 0)
+        items_out.append(doc_out)
+
     return {
-        "items": result.scalars().all(),
+        "items": items_out,
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -273,7 +300,157 @@ async def get_group_document(
             detail="Không tìm thấy tài liệu trong nhóm này",
         )
 
-    return document
+    doc_out = DocumentOut.model_validate(document)
+    if document.is_bundle:
+        cnt = await db.scalar(
+            select(func.count(Document.id)).where(
+                Document.bundle_parent_id == document.id,
+                Document.is_deleted == False
+            )
+        )
+        doc_out.bundle_children_count = cnt or 0
+
+    return doc_out
+
+@router.get("/groups/{group_id}/documents/{bundle_id}/children", response_model=list[DocumentOut])
+async def get_group_bundle_children(
+    group_id: int,
+    bundle_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await require_member(db, group_id, current_user.id)
+    bundle = await db.get(Document, bundle_id)
+    if not bundle or bundle.workspace_id != group_id or not bundle.is_bundle or bundle.is_deleted:
+        raise HTTPException(status_code=404, detail="Không tìm thấy gói tài liệu")
+
+    result = await db.execute(
+        select(Document)
+        .options(selectinload(Document.tags), selectinload(Document.owner))
+        .where(
+            Document.bundle_parent_id == bundle_id,
+            Document.workspace_id == group_id,
+            Document.is_deleted == False
+        )
+        .order_by(Document.created_at.asc())
+    )
+    return result.scalars().all()
+
+@router.post("/groups/{group_id}/documents/upload-batch", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
+async def upload_group_batch_documents(
+    group_id: int,
+    bundle_title: str = Form(...),
+    bundle_description: Optional[str] = Form(None),
+    tag_ids: str = Form(""),
+    category_id: Optional[int] = Form(None),
+    files: list[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await require_full_permission(db, group_id, current_user.id)
+    if not bundle_title or not bundle_title.strip():
+        raise HTTPException(status_code=400, detail="Tên gói tài liệu không được để trống")
+    if not files or len(files) < 1 or len(files) > 10:
+        raise HTTPException(status_code=400, detail="Số lượng file phải từ 1 đến 10")
+
+    tag_ids_list = []
+    if tag_ids:
+        try:
+            tag_ids_list = [int(x.strip()) for x in tag_ids.split(",") if x.strip()]
+        except ValueError:
+            raise HTTPException(status_code=400, detail="tag_ids không hợp lệ")
+
+    saved_file_paths = []
+    try:
+        tags_list = []
+        if tag_ids_list:
+            tag_result = await db.execute(
+                select(Tag).where(Tag.id.in_(tag_ids_list))
+            )
+            tags_list = list(tag_result.scalars().all())
+
+        bundle = Document(
+            owner_id=current_user.id,
+            workspace_id=group_id,
+            category_id=category_id,
+            title=bundle_title.strip(),
+            description=bundle_description,
+            file_path="__bundle__",
+            file_type="application/bundle",
+            file_size=0,
+            checksum="bundle",
+            is_bundle=True,
+            bundle_parent_id=None,
+            is_deleted=False,
+            tags=tags_list,
+        )
+        db.add(bundle)
+        await db.flush()
+
+        total_size = 0
+        storage_dir = f"storage/groups/{group_id}"
+        os.makedirs(storage_dir, exist_ok=True)
+
+        for file in files:
+            content = await file.read()
+            total_size += len(content)
+            unique_name = f"{uuid.uuid4().hex}_{file.filename}"
+            file_path = f"{storage_dir}/{unique_name}"
+            with open(file_path, "wb") as f:
+                f.write(content)
+            saved_file_paths.append(file_path)
+
+            checksum = hashlib.sha256(content).hexdigest()
+            child = Document(
+                owner_id=current_user.id,
+                workspace_id=group_id,
+                category_id=category_id,
+                title=file.filename or "Untitled",
+                file_path=file_path,
+                file_type=file.content_type or "application/octet-stream",
+                file_size=len(content),
+                checksum=checksum,
+                is_bundle=False,
+                bundle_parent_id=bundle.id,
+                is_deleted=False,
+            )
+            db.add(child)
+
+        bundle.file_size = total_size
+
+        await db.commit()
+
+        # Query lại bundle cùng quan hệ tags & owner để tránh greenlet_spawn error
+        result = await db.execute(
+            select(Document)
+            .options(
+                selectinload(Document.tags),
+                selectinload(Document.owner),
+            )
+            .where(Document.id == bundle.id)
+        )
+        fresh_bundle = result.scalar_one()
+
+        count_result = await db.execute(
+            select(func.count(Document.id)).where(
+                Document.bundle_parent_id == bundle.id,
+                Document.is_deleted == False
+            )
+        )
+        bundle_out = DocumentOut.model_validate(fresh_bundle)
+        bundle_out.bundle_children_count = count_result.scalar() or 0
+        return bundle_out
+    except Exception as e:
+        await db.rollback()
+        for p in saved_file_paths:
+            if os.path.exists(p):
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"Lỗi khi tải lên gói tài liệu nhóm: {str(e)}")
 
 @router.post("/groups/{group_id}/documents/upload", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
 async def upload_group_document(

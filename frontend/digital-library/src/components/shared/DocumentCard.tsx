@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Package } from "lucide-react";
 import { FileIcon, type FileTypeMap } from "@/components/shared/FileIcon";
 import {
   DocumentContextMenu,
@@ -137,6 +138,9 @@ export interface DocumentCardProps {
     extension?: string;
     thumbnail_path?: string | null;
     tags?: DocumentTag[];
+    is_bundle?: boolean;
+    bundle_parent_id?: number | null;
+    bundle_children_count?: number | null;
   };
   onAction: (action: DocumentAction | string, documentId: string) => void;
   basePath?: string;
@@ -157,9 +161,20 @@ export function DocumentCard({
 }: DocumentCardProps) {
   const navigate = useNavigate();
   const [imageError, setImageError] = useState(false);
+  const isBundle = document.is_bundle === true;
+
+  const getDocTargetUrl = (docId: string) => {
+    if (isBundle) {
+      if (basePath.startsWith("/groups/")) {
+        return `${basePath.split("/documents")[0]}/bundle/${docId}`;
+      }
+      return `/personal/bundle/${docId}`;
+    }
+    return `${basePath}/${docId}`;
+  };
 
   const handleAction = (action: DocumentAction | string, id: string) => {
-    if (action === "view") navigate(`${basePath}/${id}`);
+    if (action === "view") navigate(getDocTargetUrl(id));
     else onAction(action, id);
   };
 
@@ -176,24 +191,47 @@ export function DocumentCard({
   return (
     <div
       id={`doc-${document.id}`}
-      className={`group relative flex h-[280px] w-full flex-col rounded-xl border border-gray-200/80 bg-white shadow-xs transition-all duration-200 hover:z-30 hover:-translate-y-1 hover:shadow-md focus-within:z-30 ${theme.border}`}
+      className={`group relative flex h-[280px] w-full flex-col rounded-xl border ${
+        isBundle
+          ? "border-purple-200 bg-purple-50/20"
+          : "border-gray-200/80 bg-white"
+      } shadow-xs transition-all duration-200 hover:z-30 hover:-translate-y-1 hover:shadow-md focus-within:z-30 ${
+        isBundle ? "hover:border-purple-300" : theme.border
+      }`}
     >
       {/* 1. KHUNG PREVIEW TÀI LIỆU */}
       <div
-        className={`relative h-[135px] w-full shrink-0 cursor-pointer overflow-hidden rounded-t-xl transition-colors ${theme.bg} flex items-center justify-center`}
-        onClick={() => navigate(`${basePath}/${document.id}`)}
+        className={`relative h-[135px] w-full shrink-0 cursor-pointer overflow-hidden rounded-t-xl transition-colors ${
+          isBundle ? "bg-purple-100/40" : theme.bg
+        } flex items-center justify-center`}
+        onClick={() => navigate(getDocTargetUrl(document.id))}
       >
         {/* Badge định dạng ở góc trên bên trái */}
         <div className="absolute left-2.5 top-2.5 z-10">
-          <span
-            className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide backdrop-blur-xs ${theme.badgeBg} ${theme.badgeText}`}
-          >
-            {ext || "FILE"}
-          </span>
+          {isBundle ? (
+            <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide backdrop-blur-xs bg-purple-100 text-purple-700">
+              BUNDLE
+            </span>
+          ) : (
+            <span
+              className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide backdrop-blur-xs ${theme.badgeBg} ${theme.badgeText}`}
+            >
+              {ext || "FILE"}
+            </span>
+          )}
         </div>
 
         {/* Thumbnail hoặc Icon đại diện */}
-        {thumbnailUrl ? (
+        {isBundle ? (
+          <div className="flex flex-col items-center justify-center gap-2">
+            <div className="relative">
+              <Package className="h-16 w-16 text-purple-500" />
+              <span className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-purple-600 text-xs font-bold text-white">
+                {document.bundle_children_count ?? 0}
+              </span>
+            </div>
+          </div>
+        ) : thumbnailUrl ? (
           <img
             src={thumbnailUrl}
             alt={document.name}
@@ -213,7 +251,7 @@ export function DocumentCard({
           {/* Tiêu đề & Menu thao tác */}
           <div className="flex items-start justify-between gap-1.5">
             <h3
-              onClick={() => navigate(`${basePath}/${document.id}`)}
+              onClick={() => navigate(getDocTargetUrl(document.id))}
               className="line-clamp-2 flex-1 cursor-pointer text-sm font-semibold text-gray-800 transition-colors hover:text-primary-600 leading-snug"
               title={document.name}
             >
@@ -232,6 +270,12 @@ export function DocumentCard({
               />
             </div>
           </div>
+
+          {isBundle && (
+            <p className="text-xs text-purple-600 font-medium mt-0.5">
+              {document.bundle_children_count ?? 0} tài liệu bên trong
+            </p>
+          )}
 
           {/* Dung lượng & Ngày cập nhật */}
           <p className="mt-1.5 text-[11px] font-medium text-gray-400 flex items-center gap-1.5">

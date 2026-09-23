@@ -4,9 +4,11 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ChevronDown,
+  ChevronRight,
   User,
   Heart,
   Download,
+  Package,
 } from 'lucide-react'
 import { FileIcon, type FileTypeMap } from './FileIcon'
 import { DocumentContextMenu, type DocumentAction } from './DocumentContextMenu'
@@ -145,6 +147,9 @@ export interface DocumentListItem {
   workspace_type?: 'personal' | 'group' | 'shared'
   tags?: Array<{ id: number; name: string; color?: string }>
   isFavorite?: boolean
+  is_bundle?: boolean
+  bundle_parent_id?: number | null
+  bundle_children_count?: number | null
 }
 
 interface DocumentListViewProps {
@@ -155,7 +160,11 @@ interface DocumentListViewProps {
   showOwner?: boolean
   workspaceType?: 'personal' | 'group'
   permission?: 'owner' | 'full' | 'view'
+  extraItems?: any[]
+  onToggleBundle?: (bundleId: string | number) => Promise<DocumentListItem[]>
 }
+
+
 
 interface SortConfig {
   key: 'name' | 'size' | 'date' | 'type'
@@ -201,6 +210,8 @@ export function DocumentListView({
   showOwner = false,
   workspaceType = 'personal',
   permission = 'view',
+  extraItems,
+  onToggleBundle,
 }: DocumentListViewProps) {
   const navigate = useNavigate()
   const [imageErrors, setImageErrors] = useState<Record<string | number, boolean>>({})
@@ -208,6 +219,46 @@ export function DocumentListView({
     key: 'date',
     direction: 'desc',
   })
+
+  // States for bundle expand/collapse
+  const [expandedBundles, setExpandedBundles] = useState<Set<string | number>>(new Set())
+  const [loadingBundles, setLoadingBundles] = useState<Set<string | number>>(new Set())
+  const [bundleChildren, setBundleChildren] = useState<Record<string | number, DocumentListItem[]>>({})
+
+  const handleToggleBundle = async (e: React.MouseEvent, bundleId: string | number) => {
+    e.stopPropagation()
+    if (!onToggleBundle) return
+
+    if (expandedBundles.has(bundleId)) {
+      const next = new Set(expandedBundles)
+      next.delete(bundleId)
+      setExpandedBundles(next)
+      return
+    }
+
+    // Expand
+    const next = new Set(expandedBundles)
+    next.add(bundleId)
+    setExpandedBundles(next)
+
+    // Load if not loaded
+    if (!bundleChildren[bundleId] && !loadingBundles.has(bundleId)) {
+      try {
+        setLoadingBundles(prev => new Set(prev).add(bundleId))
+        const children = await onToggleBundle(bundleId)
+        setBundleChildren(prev => ({ ...prev, [bundleId]: children }))
+      } catch (err) {
+        console.error("Lỗi khi tải tài liệu con của gói:", err)
+      } finally {
+        setLoadingBundles(prev => {
+          const s = new Set(prev)
+          s.delete(bundleId)
+          return s
+        })
+      }
+    }
+  }
+
 
   const sortedDocuments = [...documents].sort((a, b) => {
     let aValue: any
@@ -246,9 +297,13 @@ export function DocumentListView({
     }))
   }
 
-  const handleRowClick = (docId: string | number) => {
+  const handleRowClick = (doc: DocumentListItem) => {
     if (navigationPath) {
-      navigate(navigationPath(docId))
+      navigate(navigationPath(doc.id))
+    } else if (doc.is_bundle) {
+      navigate(`/personal/bundle/${doc.id}`)
+    } else {
+      navigate(`/personal/documents/${doc.id}`)
     }
   }
 
@@ -356,168 +411,274 @@ export function DocumentListView({
           const ownerName = doc.owner?.full_name || doc.owner?.username
           const ownerAvatar = doc.owner?.avatar_url || doc.owner?.avatar
 
+          const isBundle = doc.is_bundle === true
           const ext = getFileExtension(doc.extension || doc.type?.toString())
-          const theme = FILE_TYPE_THEMES[ext] || DEFAULT_THEME
+          const theme = isBundle
+            ? { bg: 'bg-purple-50/70', badgeBg: 'bg-purple-100', badgeText: 'text-purple-700', border: 'border-purple-200' }
+            : (FILE_TYPE_THEMES[ext] || DEFAULT_THEME)
           
           const thumbnailUrl =
-            doc.thumbnail_path && !imageErrors[doc.id]
+            !isBundle && doc.thumbnail_path && !imageErrors[doc.id]
               ? `${import.meta.env.VITE_API_URL || ''}/${doc.thumbnail_path}`
               : null
 
+          const isExpanded = expandedBundles.has(doc.id)
+          const isLoading = loadingBundles.has(doc.id)
+          const childrenList = bundleChildren[doc.id] || []
+
           return (
-            <div
-              key={doc.id}
-              onClick={() => handleRowClick(doc.id)}
-              className={cn(
-                'group grid grid-cols-12 gap-3 px-4 py-3 items-center',
-                'hover:bg-slate-50/80 transition-all cursor-pointer'
-              )}
-            >
-              {/* Tên tài liệu & Preview Thẻ phong cách DocumentCard */}
-              <div className="col-span-6 md:col-span-5 flex items-center gap-3 min-w-0">
-                {/* Thumbnail hoặc Icon preview với Theme màu sắc & Badge */}
-                <div
-                  className={cn(
-                    'relative flex-shrink-0 h-10 w-12 rounded-lg border border-gray-200 overflow-hidden flex items-center justify-center transition-transform duration-200 group-hover:scale-105',
-                    theme.bg
-                  )}
-                >
-                  {thumbnailUrl ? (
-                    <img
-                      src={thumbnailUrl}
-                      alt={doc.title}
-                      className="h-full w-full object-cover"
-                      onError={() =>
-                        setImageErrors((prev) => ({ ...prev, [doc.id]: true }))
-                      }
-                    />
+            <div key={doc.id} className="flex flex-col">
+              <div
+                onClick={(e) => {
+                  if (isBundle && onToggleBundle) {
+                    handleToggleBundle(e, doc.id)
+                  } else {
+                    handleRowClick(doc)
+                  }
+                }}
+                className={cn(
+                  'group grid grid-cols-12 gap-3 px-4 py-3 items-center',
+                  isBundle ? 'hover:bg-purple-50/40 bg-purple-50/10' : 'hover:bg-slate-50/80',
+                  'transition-all cursor-pointer'
+                )}
+              >
+                {/* Tên tài liệu & Preview */}
+                <div className="col-span-6 md:col-span-5 flex items-center gap-3 min-w-0">
+                  {/* Chevron for bundle */}
+                  {isBundle && onToggleBundle ? (
+                    <button
+                      onClick={(e) => handleToggleBundle(e, doc.id)}
+                      className="p-1 -ml-1 text-purple-600 hover:bg-purple-100 rounded"
+                    >
+                      {isLoading ? (
+                        <div className="h-4 w-4 rounded-full border-2 border-purple-600 border-t-transparent animate-spin" />
+                      ) : (
+                        <ChevronRight
+                          className={cn('h-4 w-4 transition-transform', isExpanded && 'rotate-90')}
+                        />
+                      )}
+                    </button>
                   ) : (
-                    <FileIcon type={doc.type || 'default'} className="h-5 w-5 text-gray-600" />
+                    // Placeholder for alignment if we want it, or just omit. 
+                    // Let's add a tiny margin if it's not a bundle but there could be bundles in the list
+                    <div className="w-4 shrink-0" />
                   )}
 
-                  {/* Badge Extension nhỏ tinh tế */}
-                  <span
+                  {/* Thumbnail hoặc Icon preview với Theme màu sắc & Badge */}
+                  <div
                     className={cn(
-                      'absolute bottom-0.5 right-0.5 px-1 rounded-[4px] text-[8px] font-bold uppercase tracking-tighter backdrop-blur-xs',
-                      theme.badgeBg,
-                      theme.badgeText
+                      'relative flex-shrink-0 h-10 w-12 rounded-lg border border-gray-200 overflow-hidden flex items-center justify-center transition-transform duration-200 group-hover:scale-105',
+                      theme.bg
                     )}
                   >
-                    {ext || 'FILE'}
-                  </span>
-                </div>
+                    {isBundle ? (
+                      <Package className="h-5 w-5 text-purple-600" />
+                    ) : thumbnailUrl ? (
+                      <img
+                        src={thumbnailUrl}
+                        alt={doc.title}
+                        className="h-full w-full object-cover"
+                        onError={() =>
+                          setImageErrors((prev) => ({ ...prev, [doc.id]: true }))
+                        }
+                      />
+                    ) : (
+                      <FileIcon type={doc.type || 'default'} className="h-5 w-5 text-gray-600" />
+                    )}
 
-                <div className="min-w-0 flex-1">
-                  <p
-                    className="text-sm font-semibold text-gray-800 truncate group-hover:text-primary-600 transition-colors leading-snug"
-                    title={doc.title}
-                  >
-                    {doc.title}
-                  </p>
-
-                  {doc.tags && doc.tags.length > 0 && (
-                    <div className="flex gap-1 mt-1 flex-wrap">
-                      {doc.tags.slice(0, 2).map((tag) => (
-                        <span
-                          key={tag.id}
-                          className="inline-flex items-center text-[10px] font-medium bg-gray-100 text-gray-600 px-1.5 py-0.2 rounded-md"
-                        >
-                          #{tag.name}
-                        </span>
-                      ))}
-                      {doc.tags.length > 2 && (
-                        <span className="text-[10px] text-gray-400 font-medium">
-                          +{doc.tags.length - 2}
-                        </span>
+                    {/* Badge Extension */}
+                    <span
+                      className={cn(
+                        'absolute bottom-0.5 right-0.5 px-1 rounded-[4px] text-[8px] font-bold uppercase tracking-tighter backdrop-blur-xs',
+                        theme.badgeBg,
+                        theme.badgeText
                       )}
-                    </div>
-                  )}
-                </div>
-              </div>
+                    >
+                      {isBundle ? 'BUNDLE' : (ext || 'FILE')}
+                    </span>
+                  </div>
 
-              {/* Owner */}
-              {showOwner && (
-                <div className="hidden md:flex col-span-2 items-center gap-2 min-w-0">
-                  {ownerAvatar ? (
-                    <img
-                      src={ownerAvatar}
-                      alt={ownerName}
-                      className="h-5 w-5 rounded-full object-cover shrink-0"
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className="text-sm font-semibold text-gray-800 truncate group-hover:text-primary-600 transition-colors leading-snug"
+                      title={doc.title}
+                    >
+                      {doc.title}
+                    </p>
+
+                    {isBundle && (
+                      <span className="text-[11px] text-purple-600 font-medium block">
+                        {doc.bundle_children_count ?? 0} tài liệu bên trong
+                      </span>
+                    )}
+
+                    {doc.tags && doc.tags.length > 0 && (
+                      <div className="flex gap-1 mt-1 flex-wrap">
+                        {doc.tags.slice(0, 2).map((tag) => (
+                          <span
+                            key={tag.id}
+                            className="inline-flex items-center text-[10px] font-medium bg-gray-100 text-gray-600 px-1.5 py-0.2 rounded-md"
+                          >
+                            #{tag.name}
+                          </span>
+                        ))}
+                        {doc.tags.length > 2 && (
+                          <span className="text-[10px] text-gray-400 font-medium">
+                            +{doc.tags.length - 2}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Owner */}
+                {showOwner && (
+                  <div className="hidden md:flex col-span-2 items-center gap-2 min-w-0">
+                    {ownerAvatar ? (
+                      <img
+                        src={ownerAvatar}
+                        alt={ownerName}
+                        className="h-5 w-5 rounded-full object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="h-5 w-5 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
+                        <User className="h-3 w-3 text-gray-500" />
+                      </div>
+                    )}
+                    <span className="text-xs text-gray-600 truncate">
+                      {ownerName || 'Thành viên'}
+                    </span>
+                  </div>
+                )}
+
+                {/* Ngày cập nhật */}
+                <div
+                  className={cn(
+                    showOwner ? 'col-span-3 md:col-span-2' : 'col-span-3 md:col-span-3',
+                    'text-xs text-gray-500 text-right md:text-left truncate font-medium'
+                  )}
+                >
+                  {displayDate}
+                </div>
+
+                {/* Dung lượng */}
+                <div
+                  className={cn(
+                    showOwner ? 'hidden md:flex col-span-2' : 'col-span-2 md:col-span-3',
+                    'text-xs text-gray-500 justify-end text-right font-medium'
+                  )}
+                >
+                  {displaySize}
+                </div>
+
+                {/* Thao tác */}
+                <div
+                  className="col-span-3 md:col-span-1 flex items-center justify-end gap-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="hidden group-hover:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {onAction && workspaceType === 'personal' && (
+                      <button
+                        onClick={() => onAction('favorite', doc.id)}
+                        className="p-1 text-gray-400 hover:text-rose-500 rounded-md hover:bg-gray-100 transition-colors"
+                        title="Yêu thích"
+                      >
+                        <Heart
+                          className={cn(
+                            'h-3.5 w-3.5',
+                            doc.isFavorite && 'fill-rose-500 text-rose-500'
+                          )}
+                        />
+                      </button>
+                    )}
+                    {onAction && (
+                      <button
+                        onClick={() => onAction('download', doc.id)}
+                        className="p-1 text-gray-400 hover:text-gray-700 rounded-md hover:bg-gray-100 transition-colors"
+                        title="Tải xuống"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Phân loại Menu dựa trên workspaceType */}
+                  {workspaceType === 'group' ? (
+                    <GroupDocumentContextMenu
+                      permission={permission}
+                      onAction={(action) => onAction?.(action, doc.id)}
                     />
                   ) : (
-                    <div className="h-5 w-5 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-                      <User className="h-3 w-3 text-gray-500" />
-                    </div>
+                    <DocumentContextMenu
+                      onAction={(action: DocumentAction) => onAction?.(action, doc.id)}
+                      extraItems={extraItems}
+                    />
                   )}
-                  <span className="text-xs text-gray-600 truncate">
-                    {ownerName || 'Thành viên'}
-                  </span>
+                </div>
+              </div>
+
+              {/* Children block */}
+              {isExpanded && childrenList.length > 0 && (
+                <div className="bg-gray-50/50 border-t border-purple-100">
+                  <div className="pl-8 border-l-2 border-purple-200 ml-4 my-2 flex flex-col gap-1">
+                    {childrenList.map((childDoc) => {
+                      const cExt = getFileExtension(childDoc.extension || childDoc.type?.toString())
+                      const cTheme = FILE_TYPE_THEMES[cExt] || DEFAULT_THEME
+                      const cThumbnail = childDoc.thumbnail_path && !imageErrors[childDoc.id]
+                        ? `${import.meta.env.VITE_API_URL || ''}/${childDoc.thumbnail_path}`
+                        : null
+
+                      return (
+                        <div
+                          key={childDoc.id}
+                          onClick={() => handleRowClick(childDoc)}
+                          className="group grid grid-cols-12 gap-3 px-3 py-2 items-center hover:bg-white rounded-lg transition-colors cursor-pointer mr-2"
+                        >
+                          <div className="col-span-6 md:col-span-5 flex items-center gap-3 min-w-0">
+                            <div className={cn('relative flex-shrink-0 h-8 w-10 rounded border border-gray-200 overflow-hidden flex items-center justify-center', cTheme.bg)}>
+                              {cThumbnail ? (
+                                <img src={cThumbnail} alt={childDoc.title} className="h-full w-full object-cover" onError={() => setImageErrors(p => ({ ...p, [childDoc.id]: true }))} />
+                              ) : (
+                                <FileIcon type={childDoc.type || 'default'} className="h-4 w-4 text-gray-500" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-semibold text-gray-700 truncate group-hover:text-primary-600 transition-colors" title={childDoc.title}>
+                                {childDoc.title}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          {showOwner && (
+                            <div className="hidden md:flex col-span-2 items-center gap-2 min-w-0">
+                              <span className="text-[11px] text-gray-500 truncate">
+                                {childDoc.owner?.full_name || childDoc.owner?.username || 'Thành viên'}
+                              </span>
+                            </div>
+                          )}
+
+                          <div className={cn(showOwner ? 'col-span-3 md:col-span-2' : 'col-span-3 md:col-span-3', 'text-[11px] text-gray-400 font-medium truncate text-right md:text-left')}>
+                            {safeFormatDate(childDoc.updatedAt)}
+                          </div>
+
+                          <div className={cn(showOwner ? 'hidden md:flex col-span-2' : 'col-span-2 md:col-span-3', 'text-[11px] text-gray-400 font-medium justify-end text-right')}>
+                            {safeFormatSize(childDoc.size)}
+                          </div>
+
+                          <div className="col-span-3 md:col-span-1 flex items-center justify-end" onClick={e => e.stopPropagation()}>
+                            {workspaceType === 'group' ? (
+                              <GroupDocumentContextMenu permission={permission} onAction={action => onAction?.(action, childDoc.id)} />
+                            ) : (
+                              <DocumentContextMenu onAction={action => onAction?.(action, childDoc.id)} extraItems={extraItems} />
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
-
-              {/* Ngày cập nhật */}
-              <div
-                className={cn(
-                  showOwner ? 'col-span-3 md:col-span-2' : 'col-span-3 md:col-span-3',
-                  'text-xs text-gray-500 text-right md:text-left truncate font-medium'
-                )}
-              >
-                {displayDate}
-              </div>
-
-              {/* Dung lượng */}
-              <div
-                className={cn(
-                  showOwner ? 'hidden md:flex col-span-2' : 'col-span-2 md:col-span-3',
-                  'text-xs text-gray-500 justify-end text-right font-medium'
-                )}
-              >
-                {displaySize}
-              </div>
-
-              {/* Thao tác */}
-              <div
-                className="col-span-3 md:col-span-1 flex items-center justify-end gap-1"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="hidden group-hover:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {onAction && workspaceType === 'personal' && (
-                    <button
-                      onClick={() => onAction('favorite', doc.id)}
-                      className="p-1 text-gray-400 hover:text-rose-500 rounded-md hover:bg-gray-100 transition-colors"
-                      title="Yêu thích"
-                    >
-                      <Heart
-                        className={cn(
-                          'h-3.5 w-3.5',
-                          doc.isFavorite && 'fill-rose-500 text-rose-500'
-                        )}
-                      />
-                    </button>
-                  )}
-                  {onAction && (
-                    <button
-                      onClick={() => onAction('download', doc.id)}
-                      className="p-1 text-gray-400 hover:text-gray-700 rounded-md hover:bg-gray-100 transition-colors"
-                      title="Tải xuống"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Phân loại Menu dựa trên workspaceType */}
-                {workspaceType === 'group' ? (
-                  <GroupDocumentContextMenu
-                    permission={permission}
-                    onAction={(action) => onAction?.(action, doc.id)}
-                  />
-                ) : (
-                  <DocumentContextMenu
-                    onAction={(action: DocumentAction) => onAction?.(action, doc.id)}
-                  />
-                )}
-              </div>
             </div>
           )
         })}

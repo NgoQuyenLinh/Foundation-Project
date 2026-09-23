@@ -72,6 +72,7 @@ async def get_folders_with_stats(
         LEFT JOIN documents d ON d.id = dt.document_id
             AND {doc_where_clause}
             AND d.is_deleted = false
+            AND d.bundle_parent_id IS NULL
         WHERE {folder_where_clause}
         GROUP BY f.id, f.owner_id, f.workspace_id, f.name, f.color, f.created_at
         ORDER BY f.created_at ASC
@@ -114,7 +115,8 @@ async def get_documents_by_folder(
         .where(
             FolderTag.folder_id == folder_id,
             Document.owner_id == owner_id,
-            Document.is_deleted == False
+            Document.is_deleted == False,
+            Document.bundle_parent_id.is_(None)
         )
         .distinct()
     )
