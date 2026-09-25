@@ -6,10 +6,10 @@ from pathlib import Path
 from sqlalchemy import select, insert, text, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import hash_password
-
 backend_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(backend_dir))
+
+from app.core.security import hash_password
 
 
 from app.core.database import AsyncSessionLocal
