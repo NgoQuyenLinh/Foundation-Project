@@ -12,6 +12,7 @@ import { useHighlightElement } from "@/hooks/useHighlightElement";
 import { DocumentTypeTabs } from "@/components/shared/documents/DocumentTypeTabs";
 import { RenameDocumentModal } from "@/components/shared/modals/RenameDocumentModal";
 import { ContributeModal } from "@/components/shared/modals/ContributeModal";
+import { ShareDocumentModal } from "@/components/shared/modals/ShareDocumentModal";
 import { CardSkeleton } from "@/components/shared/feedback/CardSkeleton";
 import { DocumentFilterBar } from "@/components/shared/documents/DocumentFilterBar";
 import { ManageTagsModal } from "@/components/shared/modals/ManageTagsModal";
@@ -80,6 +81,10 @@ export function PersonalDocuments() {
     setIsContributeModalOpen,
     contributeDoc,
     setContributeDoc,
+    isShareModalOpen,
+    setIsShareModalOpen,
+    sharingDoc,
+    setSharingDoc,
     fileTypes,
     docData,
     docsLoading,
@@ -250,6 +255,17 @@ export function PersonalDocuments() {
           }}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ["documents"] });
+          }}
+        />
+      )}
+
+      {isShareModalOpen && sharingDoc && (
+        <ShareDocumentModal
+          documentId={sharingDoc.id}
+          documentTitle={sharingDoc.title}
+          onClose={() => {
+            setIsShareModalOpen(false);
+            setSharingDoc(null);
           }}
         />
       )}

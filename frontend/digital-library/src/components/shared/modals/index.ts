@@ -5,3 +5,5 @@ export * from "./EditTagsModal";
 export * from "./ManageTagsModal";
 export * from "./RenameDocumentModal";
 export * from "./UploadModal";
+export * from "./UserSearchPicker";
+export * from "./ShareDocumentModal";

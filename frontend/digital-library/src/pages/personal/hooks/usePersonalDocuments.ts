@@ -63,6 +63,8 @@ export function usePersonalDocuments(
   const [renamingDoc, setRenamingDoc] = useState<{ id: string; title: string } | null>(null);
   const [isContributeModalOpen, setIsContributeModalOpen] = useState(false);
   const [contributeDoc, setContributeDoc] = useState<{ id: number; title: string } | null>(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [sharingDoc, setSharingDoc] = useState<{ id: number; title: string } | null>(null);
 
   // --- 3. QUERIES ---
   const { data: fileTypes = [] } = useQuery({
@@ -126,6 +128,12 @@ export function usePersonalDocuments(
       if (docToContribute) {
         setContributeDoc({ id: docToContribute.id, title: docToContribute.title });
         setIsContributeModalOpen(true);
+      }
+    } else if (action === "share") {
+      const docToShare = docData?.items.find((d) => d.id.toString() === documentId);
+      if (docToShare) {
+        setSharingDoc({ id: docToShare.id, title: docToShare.title });
+        setIsShareModalOpen(true);
       }
     } else if (action === "delete") {
       if (window.confirm("Xóa tài liệu này? Bạn có thể khôi phục trong thùng rác.")) {
@@ -278,6 +286,8 @@ export function usePersonalDocuments(
     renamingDoc, setRenamingDoc,
     isContributeModalOpen, setIsContributeModalOpen,
     contributeDoc, setContributeDoc,
+    isShareModalOpen, setIsShareModalOpen,
+    sharingDoc, setSharingDoc,
     activeTab, setActiveTab,
     searchQuery, setSearchQuery,
     selectedTagId, setSelectedTagId,

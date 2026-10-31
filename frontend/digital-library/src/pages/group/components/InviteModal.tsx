@@ -19,6 +19,7 @@ import { userService } from "@/services/userService";
 import { academicsService } from "@/services/academicsService";
 import { useDebounce } from "@/hooks/useDebounce";
 import type { User } from "@/types/user";
+import { UserSearchPicker } from "@/components/shared/modals/UserSearchPicker";
 
 export type InviteMode = "basic" | "advanced";
 
@@ -554,8 +555,6 @@ function AdvancedInviteForm({
   setSelectedFacultyIds,
 }: SubFormProps) {
   // State quản lý ô input con
-  const [userInputValue, setUserInputValue] = useState("");
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [patternInput, setPatternInput] = useState("");
 
   const [classSearch, setClassSearch] = useState("");
@@ -564,23 +563,9 @@ function AdvancedInviteForm({
   const [facultySearch, setFacultySearch] = useState("");
   const [showFacultyDropdown, setShowFacultyDropdown] = useState(false);
 
-  const userInputRef = useRef<HTMLInputElement>(null);
-  const userDropdownRef = useRef<HTMLDivElement>(null);
   const classDropdownRef = useRef<HTMLDivElement>(null);
   const facultyDropdownRef = useRef<HTMLDivElement>(null);
 
-  const debouncedUserTerm = useDebounce(userInputValue, 300);
-
-  const { data: userSuggestions = [], isFetching: isUserFetching } = useQuery({
-    queryKey: ["users-search", debouncedUserTerm],
-    queryFn: () => userService.searchUsers(debouncedUserTerm),
-    enabled: debouncedUserTerm.trim().length > 0,
-    staleTime: 60 * 1000,
-  });
-
-  const availableUserSuggestions = userSuggestions.filter(
-    (sug: User) => !selectedUsers.some((u) => u.id === sug.id),
-  );
 
   const filteredClasses = classes.filter(
     (c: any) =>
@@ -596,11 +581,6 @@ function AdvancedInviteForm({
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (
-        userDropdownRef.current &&
-        !userDropdownRef.current.contains(e.target as Node)
-      )
-        setShowUserDropdown(false);
       if (
         classDropdownRef.current &&
         !classDropdownRef.current.contains(e.target as Node)
@@ -629,94 +609,17 @@ function AdvancedInviteForm({
 
   return (
     <div className="space-y-5">
-      {/* 1. CÁ NHÂN */}
+      {/* 1. CA? NHA,N */}
       <div className="space-y-1.5">
         <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
-          1. Mời theo cá nhân (Tên, Email, Username)
+          1. M?i theo cA nhan (Ten, Email, Username)
         </label>
-        <div className="relative" ref={userDropdownRef}>
-          <div
-            onClick={() => userInputRef.current?.focus()}
-            className="flex min-h-[42px] w-full flex-wrap items-center gap-1.5 rounded-lg border border-gray-300 bg-white p-2 text-sm cursor-text focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500"
-          >
-            <Search className="h-4 w-4 text-gray-400 shrink-0 ml-1" />
-            {selectedUsers.map((user) => (
-              <span
-                key={user.id}
-                className="inline-flex items-center gap-1 rounded-full bg-primary-50 border border-primary-200 px-2.5 py-0.5 text-xs font-medium text-primary-700"
-              >
-                <UserIcon className="h-3 w-3" />
-                <span>{user.full_name || user.username || user.email}</span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedUsers((p) => p.filter((u) => u.id !== user.id));
-                  }}
-                  className="rounded-full p-0.5 hover:bg-primary-200 text-primary-600"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
-            <input
-              ref={userInputRef}
-              value={userInputValue}
-              onChange={(e) => {
-                setUserInputValue(e.target.value);
-                setShowUserDropdown(true);
-              }}
-              onFocus={() => setShowUserDropdown(true)}
-              placeholder={
-                selectedUsers.length === 0
-                  ? "Nhập tên, email để tìm kiếm..."
-                  : "Thêm người khác..."
-              }
-              className="flex-1 bg-transparent outline-none min-w-[140px] text-sm"
-            />
-          </div>
-
-          {showUserDropdown && debouncedUserTerm.trim() !== "" && (
-            <div className="absolute top-full left-0 z-50 mt-1 w-full rounded-xl border border-gray-100 bg-white shadow-xl overflow-hidden">
-              {isUserFetching ? (
-                <div className="p-3 text-center text-xs text-gray-500">
-                  Đang tìm kiếm...
-                </div>
-              ) : availableUserSuggestions.length > 0 ? (
-                <ul className="max-h-48 overflow-y-auto py-1">
-                  {availableUserSuggestions.map((user: User) => (
-                    <li
-                      key={user.id}
-                      onClick={() => {
-                        setSelectedUsers((p) => [...p, user]);
-                        setUserInputValue("");
-                        setShowUserDropdown(false);
-                      }}
-                      className="flex cursor-pointer items-center gap-3 px-4 py-2 hover:bg-gray-50"
-                    >
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-100 text-primary-600 font-bold text-xs">
-                        {user.full_name?.charAt(0).toUpperCase() || "U"}
-                      </div>
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-sm font-medium text-gray-900 truncate">
-                          {user.full_name || user.username}
-                        </span>
-                        <span className="text-xs text-gray-400 truncate">
-                          {user.student_code ? `${user.student_code} • ` : ""}
-                          {user.email}
-                        </span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="p-3 text-center text-xs text-gray-500">
-                  Không tìm thấy người dùng.
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <UserSearchPicker
+          selectedUsers={selectedUsers}
+          onSelect={(user) => setSelectedUsers((prev) => [...prev, user])}
+          onRemove={(userId) => setSelectedUsers((prev) => prev.filter((u) => u.id !== userId))}
+          placeholder="Nhap ten, email de tim kiem..."
+        />
       </div>
 
       {/* 2. MÃ SINH VIÊN */}
