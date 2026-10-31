@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
+import { useFavoriteStore } from '@/stores/favoriteStore'
 import { authService } from '@/services/authService'
 
 export function useRestoreSession() {
@@ -17,6 +18,7 @@ export function useRestoreSession() {
         // và lấy user info mới nhất từ DB
         const user = await authService.getMe()
         setAuth(token, user)
+        useFavoriteStore.getState().loadFavorites()
       } catch {
         // Token hết hạn hoặc không hợp lệ → logout
         clearAuth()

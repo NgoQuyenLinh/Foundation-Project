@@ -1,16 +1,16 @@
-// frontend/digital-library/src/pages/search/SearchPage.tsx
-
 import { useEffect, useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Search, FileText, ChevronLeft, ChevronRight, Folder, Users } from "lucide-react";
 import { searchService } from "@/services/searchService";
+import { navigateToBundle } from "@/utils/bundleNavigation";
 import { Button } from "@/components/ui/Button";
 
 export function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get("q") || "";
   const navigate = useNavigate();
+  const location = useLocation();
   
   // State quản lý trang hiện tại
   const [page, setPage] = useState(1);
@@ -135,7 +135,13 @@ export function SearchPage() {
                 {items.map((item: any) => (
                   <div
                     key={`${item.type}-${item.id}`}
-                    onClick={() => navigate(item.url)}
+                    onClick={() => {
+                      if (item.url && item.url.includes("/bundle/")) {
+                        navigateToBundle(navigate, location, item.url);
+                      } else {
+                        navigate(item.url);
+                      }
+                    }}
                     className="group flex cursor-pointer items-start gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-md"
                   >
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gray-50 group-hover:bg-primary-50 transition-colors">

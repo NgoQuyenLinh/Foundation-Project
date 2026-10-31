@@ -1,11 +1,22 @@
 // src/components/shared/documents/DocumentListView.tsx
 
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronRight, User, Heart, Download, Package } from 'lucide-react'
-import { FileIcon } from './FileIcon'
+import { useNavigate, useLocation } from 'react-router-dom'
+import {
+  ChevronDown,
+  ChevronRight,
+  User,
+  Heart,
+  Download,
+  Package,
+} from 'lucide-react'
+import { FileIcon, type FileTypeMap } from './FileIcon'
 import { DocumentContextMenu, type DocumentAction } from './DocumentContextMenu'
 import { GroupDocumentContextMenu } from '@/pages/group/components/GroupDocumentContextMenu'
+import { useFavoriteStore } from '@/stores/favoriteStore'
+import { navigateToBundle, getCurrentFullPath } from '@/utils/bundleNavigation'
+import { formatSize } from '@/utils/formatSize'
+import { formatRelativeDate } from '@/utils/formatDate'
 import { cn } from '@/utils/cn'
 import {
   type BaseDocumentViewProps,
@@ -51,6 +62,7 @@ export function DocumentListView({
   onToggleBundle,
 }: DocumentListViewProps) {
   const navigate = useNavigate()
+  const location = useLocation()
   const [imageErrors, setImageErrors] = useState<Record<string | number, boolean>>({})
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'date',
@@ -135,9 +147,14 @@ export function DocumentListView({
     if (navigationPath) {
       navigate(navigationPath(doc.id))
     } else if (doc.is_bundle) {
-      navigate(`/personal/bundle/${doc.id}`)
+      const bundleTargetUrl = workspaceType === 'group'
+        ? `/groups/bundle/${doc.id}`
+        : `/personal/bundle/${doc.id}`
+      navigateToBundle(navigate, location, bundleTargetUrl)
     } else {
-      navigate(`/personal/documents/${doc.id}`)
+      navigate(`/personal/documents/${doc.id}`, {
+        state: { from: getCurrentFullPath(location) },
+      })
     }
   }
 
@@ -265,6 +282,9 @@ export function DocumentListView({
           const isBundleLoading = loadingBundles.has(doc.id)
           const childrenList = bundleChildren[doc.id] || []
 
+          const docNumId = Number(doc.id)
+          const isDocFav = !isNaN(docNumId) && useFavoriteStore.getState().isFavorite(docNumId)
+
           return (
             <div key={doc.id} className="flex flex-col">
               <div
@@ -277,7 +297,9 @@ export function DocumentListView({
                 }}
                 className={cn(
                   'group grid grid-cols-12 gap-3 px-4 py-3 items-center',
-                  isBundle
+isDocFav
+                    ? 'bg-rose-50/30 hover:bg-rose-50/60'
+                    : isBundle
                     ? 'hover:bg-purple-50/40 bg-purple-50/10'
                     : 'hover:bg-slate-50/80',
                   'transition-all cursor-pointer'
@@ -419,17 +441,31 @@ export function DocumentListView({
                   className="col-span-3 md:col-span-1 flex items-center justify-end gap-1"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="hidden group-hover:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {onAction && workspaceType === 'personal' && (
+                  <div className={cn(
+                    "items-center gap-1 transition-opacity",
+                    isDocFav ? "flex opacity-100" : "hidden group-hover:flex opacity-0 group-hover:opacity-100"
+                  )}>
+                    {workspaceType === 'personal' && (
                       <button
-                        onClick={() => onAction('favorite', doc.id)}
-                        className="p-1 text-gray-400 hover:text-rose-500 rounded-md hover:bg-gray-100 transition-colors"
-                        title="Yêu thích"
+                        onClick={async () => {
+                          if (!isNaN(docNumId)) {
+                            await useFavoriteStore.getState().toggleFavorite(docNumId)
+                          } else if (onAction) {
+                            onAction('favorite', doc.id)
+                          }
+                        }}
+                        className={cn(
+                          "p-1 rounded-md transition-colors",
+                          isDocFav
+                            ? "text-rose-500 hover:bg-rose-50"
+                            : "text-gray-400 hover:text-rose-500 hover:bg-gray-100"
+                        )}
+                        title={isDocFav ? "Bỏ yêu thích" : "Yêu thích"}
                       >
                         <Heart
                           className={cn(
                             'h-3.5 w-3.5',
-                            doc.isFavorite && 'fill-rose-500 text-rose-500'
+                            isDocFav && 'fill-rose-500 text-rose-500'
                           )}
                         />
                       </button>
@@ -452,6 +488,7 @@ export function DocumentListView({
                     />
                   ) : (
                     <DocumentContextMenu
+                      documentId={doc.id}
                       onAction={(action: DocumentAction) => onAction?.(action, doc.id)}
                       extraItems={extraItems}
                     />

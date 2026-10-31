@@ -1,9 +1,12 @@
 // src/components/shared/FileDocumentCard.tsx
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
+import { Heart } from "lucide-react";
 import { FileIcon } from "@/components/shared/documents/FileIcon";
 import { DocumentContextMenu } from "@/components/shared/documents/DocumentContextMenu";
+import { useFavoriteStore } from "@/stores/favoriteStore";
+import { getCurrentFullPath } from "@/utils/bundleNavigation";
 import type { DocumentCardProps } from "./DocumentCard";
 
 // ======================================================
@@ -128,12 +131,17 @@ export function FileDocumentCard({
   extraItems,
 }: DocumentCardProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [imageError, setImageError] = useState(false);
 
   const targetUrl = `${basePath}/${document.id}`;
 
+  const handleOpenDoc = () => {
+    navigate(targetUrl, { state: { from: getCurrentFullPath(location) } });
+  };
+
   const handleAction = (action: string) => {
-    if (action === "view") navigate(targetUrl);
+    if (action === "view") handleOpenDoc();
     else onAction(action, document.id);
   };
 
@@ -146,16 +154,30 @@ export function FileDocumentCard({
       : null;
 
   const tags = document.tags || [];
+  const docNumId = Number(document.id);
+  const isFavorite = useFavoriteStore((state) => (isNaN(docNumId) ? false : state.isFavorite(docNumId)));
+  const toggleFavorite = useFavoriteStore((state) => state.toggleFavorite);
+
+  const handleFavoriteClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isNaN(docNumId)) {
+      await toggleFavorite(docNumId);
+    }
+  };
 
   return (
     <div
       id={`doc-${document.id}`}
-      className={`group relative flex h-[280px] w-full flex-col rounded-xl border border-gray-200/80 bg-white shadow-xs transition-all duration-200 hover:z-30 hover:-translate-y-1 hover:shadow-md focus-within:z-30 ${theme.border}`}
+      className={`group relative flex h-[280px] w-full flex-col rounded-xl border bg-white shadow-xs transition-all duration-200 hover:z-30 hover:-translate-y-1 hover:shadow-md focus-within:z-30 ${
+        isFavorite
+          ? "border-rose-300 ring-1 ring-rose-200 shadow-rose-50"
+          : `border-gray-200/80 ${theme.border}`
+      }`}
     >
       {/* Khung Preview */}
       <div
         className={`relative h-[135px] w-full shrink-0 cursor-pointer overflow-hidden rounded-t-xl transition-colors ${theme.bg} flex items-center justify-center`}
-        onClick={() => navigate(targetUrl)}
+        onClick={handleOpenDoc}
       >
         <div className="absolute left-2.5 top-2.5 z-10">
           <span
@@ -186,10 +208,10 @@ export function FileDocumentCard({
       <div className="relative flex flex-1 flex-col justify-between p-3.5 rounded-b-xl bg-white">
         <div>
           <div className="flex items-start justify-between gap-1.5">
-            {/* 1. Bọc h3 và Tooltip trong một div có className "relative" */}
+{/* 1. Bọc h3 và Tooltip trong một div có className "relative" */}
             <div className="relative flex-1 min-w-0">
               <h3
-                onClick={() => navigate(targetUrl)}
+                onClick={handleOpenDoc}
                 className="line-clamp-2 cursor-pointer text-sm font-semibold text-gray-800 transition-colors hover:text-primary-600 leading-snug"
                 title={document.name}
               >
@@ -201,15 +223,33 @@ export function FileDocumentCard({
               </div>
             </div>
 
-            <div
-              className="relative z-50 shrink-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <DocumentContextMenu
-                onAction={handleAction}
-                allowedActions={allowedActions}
-                extraItems={extraItems}
-              />
+            <div className="flex items-center gap-0.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleFavoriteClick}
+                title={isFavorite ? "Bỏ yêu thích" : "Thêm vào yêu thích"}
+                className={`p-1 rounded-full transition-all duration-150 focus:outline-none ${
+                  isFavorite
+                    ? "opacity-100 text-rose-500 hover:text-rose-600 hover:bg-rose-50"
+                    : "opacity-0 group-hover:opacity-100 text-gray-400 hover:text-rose-500 hover:bg-gray-100"
+                }`}
+              >
+                <Heart
+                  className={`h-4 w-4 ${isFavorite ? "fill-rose-500 text-rose-500" : ""}`}
+                />
+              </button>
+
+              <div
+                className="relative z-50 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <DocumentContextMenu
+                  documentId={document.id}
+                  onAction={handleAction}
+                  allowedActions={allowedActions}
+                  extraItems={extraItems}
+                />
+              </div>
             </div>
           </div>
 

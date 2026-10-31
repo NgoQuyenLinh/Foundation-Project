@@ -4,8 +4,9 @@
 // 1. IMPORTS
 // ==========================================
 import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate, Navigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation, Navigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getBundleOriginPath } from "@/utils/bundleNavigation";
 import { renderAsync } from "docx-preview";
 import {
   ArrowLeft,
@@ -378,6 +379,7 @@ export function DocumentDetail(props: SharedDocumentDetailProps = {}) {
 
   const params = useParams<{ id?: string; docId?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
 
   const id = propDocumentId ?? Number(params.id);
@@ -394,11 +396,14 @@ export function DocumentDetail(props: SharedDocumentDetailProps = {}) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [tempTitle, setTempTitle] = useState("");
 
+  const stateFrom = (location.state as { from?: string } | null)?.from;
+  const effectiveBackUrl = stateFrom || backUrl || "/personal/documents";
+
   const handleBack = () => {
     if (onBack) {
       onBack();
-    } else if (backUrl) {
-      navigate(backUrl);
+    } else if (effectiveBackUrl) {
+      navigate(effectiveBackUrl);
     } else {
       navigate(-1);
     }
@@ -657,7 +662,8 @@ export function DocumentDetail(props: SharedDocumentDetailProps = {}) {
     const targetUrl = isGroup
       ? `/groups/${params.id}/bundle/${doc.id}`
       : `/personal/bundle/${doc.id}`;
-    return <Navigate to={targetUrl} replace />;
+    const originFrom = getBundleOriginPath(location, doc.id, effectiveBackUrl);
+    return <Navigate to={targetUrl} state={{ from: originFrom }} replace />;
   }
 
   // --- DATA MAPPING ---

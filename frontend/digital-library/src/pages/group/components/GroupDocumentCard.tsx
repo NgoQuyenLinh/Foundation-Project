@@ -42,6 +42,9 @@ export function GroupDocumentCard({
     owner: document.owner
       ? { name: document.owner.name, avatar: document.owner.avatar }
       : undefined,
+    is_bundle: document.is_bundle,
+    bundle_parent_id: document.bundle_parent_id,
+    bundle_children_count: document.bundle_children_count,
   };
 
   return (
@@ -49,7 +52,7 @@ export function GroupDocumentCard({
       key={formattedDoc.id}
       document={formattedDoc}
       onAction={onDocumentAction}
-      basePath={`/group/${groupId}/documents`}  
+      basePath={`/groups/${groupId}/documents`}  
       allowedActions={allowedActions}
       extraItems={extraItems}
     />

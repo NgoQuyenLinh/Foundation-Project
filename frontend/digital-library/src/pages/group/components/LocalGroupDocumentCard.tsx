@@ -1,9 +1,8 @@
-// frontend/digital-library/src/pages/group/components/LocalGroupDocumentCard.tsx
-
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { FileIcon } from "@/components/shared/documents/FileIcon";
 import { GroupDocumentContextMenu } from "@/pages/group/components/GroupDocumentContextMenu";
+import { navigateToBundle } from "@/utils/bundleNavigation";
 import { formatSize } from "@/utils/formatSize";
 import { formatRelativeDate } from "@/utils/formatDate";
 import { Avatar } from "@/components/ui/Avatar"; // <-- 1. Import Component Avatar
@@ -65,10 +64,15 @@ export default function LocalGroupDocumentCard({
   
 }: LocalGroupDocumentCardProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [imageError, setImageError] = useState(false);
 
   const handleViewDetail = () => {
-    navigate(`/groups/${groupId}/documents/${document.id}`);
+    if (document.is_bundle) {
+      navigateToBundle(navigate, location, `/groups/${groupId}/bundle/${document.id}`);
+    } else {
+      navigate(`/groups/${groupId}/documents/${document.id}`);
+    }
   };
 
   const handleAction = (action: string) => {

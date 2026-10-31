@@ -1,8 +1,9 @@
 // src/pages/personal/components/BundleExpandedFrame.tsx
 
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Package, ExternalLink } from "lucide-react";
 import { DocumentCard } from "@/components/shared/documents/DocumentCard";
+import { navigateToBundle } from "@/utils/bundleNavigation";
 import type { DocCardType } from "./PersonalDocumentsSection";
 
 interface BundleExpandedFrameProps {
@@ -21,6 +22,7 @@ export function BundleExpandedFrame({
   CardSkeleton,
 }: BundleExpandedFrameProps) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const targetUrl = `/personal/bundle/${bundle.id}`;
   const tags = bundle.tags || [];
@@ -58,7 +60,7 @@ export function BundleExpandedFrame({
 
         <button
           type="button"
-          onClick={() => navigate(targetUrl)}
+          onClick={() => navigateToBundle(navigate, location, targetUrl)}
           className="inline-flex items-center gap-1 text-xs font-medium text-purple-700 hover:text-purple-900 transition-colors shrink-0"
         >
           <span>Mở trang chi tiết</span>

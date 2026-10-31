@@ -15,6 +15,8 @@ import {
 import { Button } from "@/components/ui/Button";
 import { useAuthStore } from "@/stores/authStore";
 
+import { useFavoriteStore } from "@/stores/favoriteStore";
+
 export type DocumentAction = 
   | "view" 
   | "download" 
@@ -36,13 +38,17 @@ export interface DocumentMenuItem {
 }
 
 export interface DocumentContextMenuProps {
+  documentId?: string | number;
   onAction: (action: DocumentAction | string) => void;
   allowedActions?: DocumentAction[];
   extraItems?: DocumentMenuItem[];
 }
 
-export function DocumentContextMenu({ onAction, allowedActions, extraItems = [] }: DocumentContextMenuProps) {
+export function DocumentContextMenu({ documentId, onAction, allowedActions, extraItems = [] }: DocumentContextMenuProps) {
   const { isAuthenticated } = useAuthStore();
+  const docNumId = documentId !== undefined ? Number(documentId) : NaN;
+  const isFavorite = useFavoriteStore((state) => (!isNaN(docNumId) ? state.isFavorite(docNumId) : false));
+  const toggleFavorite = useFavoriteStore((state) => state.toggleFavorite);
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; right: number }>({
     top: 0,
@@ -100,7 +106,22 @@ export function DocumentContextMenu({ onAction, allowedActions, extraItems = [] 
     { action: "view", icon: <ExternalLink className="h-4 w-4" />, label: "Mở trong thẻ mới" },
     { action: "download", icon: <Download className="h-4 w-4" />, label: "Tải xuống" },
     { action: "share", icon: <Share2 className="h-4 w-4" />, label: "Chia sẻ" },
-    { action: "favorite", icon: <Heart className="h-4 w-4" />, label: "Thêm vào Yêu thích" },
+    {
+      action: "favorite",
+      icon: (
+        <Heart
+          className={`h-4 w-4 ${isFavorite ? "fill-rose-500 text-rose-500" : ""}`}
+        />
+      ),
+      label: isFavorite ? "Bỏ yêu thích" : "Thêm vào Yêu thích",
+      onClick: async () => {
+        if (!isNaN(docNumId)) {
+          await toggleFavorite(docNumId);
+        } else {
+          onAction("favorite");
+        }
+      },
+    },
     { action: "rename", icon: <Edit2 className="h-4 w-4" />, label: "Đổi tên" },
     { action: "move", icon: <FolderInput className="h-4 w-4" />, label: "Di chuyển" },
     { action: "delete", icon: <Trash2 className="h-4 w-4" />, label: "Xóa", danger: true },

@@ -14,4 +14,5 @@ Tính năng "Document Bundle" cho phép nhóm nhiều tài liệu (documents) l�
 1. [DATABASE.md](./DATABASE.md) - Cấu trúc cơ sở dữ liệu và Model
 2. [API.md](./API.md) - Chi tiết các RESTful API endpoints 
 3. [FRONTEND.md](./FRONTEND.md) - Cấu trúc component và UI frontend
-4. [BUSINESS_RULES.md](./BUSINESS_RULES.md) - Các quy tắc nghiệp vụ quan trọng
+4. [NAVIGATION.md](./NAVIGATION.md) - Cơ chế điều hướng vào và thoát khỏi Bundle
+5. [BUSINESS_RULES.md](./BUSINESS_RULES.md) - Các quy tắc nghiệp vụ quan trọng

@@ -1,8 +1,9 @@
 // src/pages/personal/BundleDetailPage.tsx
 
 import { useState, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getBundleOriginPath } from "@/utils/bundleNavigation";
 import {
   ArrowLeft,
   Package,
@@ -55,6 +56,7 @@ export default function BundleDetailPage() {
 
   const params = useParams<{ id?: string; docId?: string; groupId?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const currentUser = useAuthStore((state) => state.user);
   const addMenuRef = useRef<HTMLDivElement>(null);
@@ -160,9 +162,12 @@ export default function BundleDetailPage() {
       queryClient.invalidateQueries({
         queryKey: isGroup ? ["group-documents", groupId] : ["documents"],
       });
-      navigate(
+      const originUrl = getBundleOriginPath(
+        location,
+        bundleId,
         isGroup ? `/groups/${groupId}?tab=documents` : "/personal/documents",
       );
+      navigate(originUrl);
     },
   });
 
@@ -232,11 +237,14 @@ export default function BundleDetailPage() {
     e.target.value = "";
   };
 
+  const defaultBackUrl = isGroup
+    ? `/groups/${groupId}?tab=documents`
+    : "/personal/documents";
+
   // ─── Handlers ───────────────────────────────────────────────────────
   const handleBack = () => {
-    navigate(
-      isGroup ? `/groups/${groupId}?tab=documents` : "/personal/documents",
-    );
+    const originUrl = getBundleOriginPath(location, bundleId, defaultBackUrl);
+    navigate(originUrl);
   };
 
   const handleChildAction = (
@@ -370,7 +378,7 @@ export default function BundleDetailPage() {
           className="text-gray-600 hover:text-gray-900 gap-1.5 pl-0"
         >
           <ArrowLeft className="h-4 w-4" />
-          <span>Quay lại {isGroup ? "nhóm" : "tài liệu cá nhân"}</span>
+          <span>Quay lại</span>
         </Button>
       </div>
 

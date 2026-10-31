@@ -29,6 +29,7 @@ from app.models import (
     DocumentVersion,
     Note,
     Favorite,
+    favorite_tags,
     DownloadLog,
     ProcessingJob,
 )
@@ -64,11 +65,16 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
+    db_url = config.get_main_option("sqlalchemy.url", "")
+    # Chỉ bật SSL khi kết nối với Neon hoặc remote host (không phải localhost)
+    use_ssl = "localhost" not in db_url and "127.0.0.1" not in db_url
+    connect_args = {"ssl": True} if use_ssl else {}
+
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        connect_args={"ssl": True},          # Bắt buộc với Neon + asyncpg
+        connect_args=connect_args,
     )
 
     async with connectable.connect() as connection:

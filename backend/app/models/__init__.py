@@ -16,6 +16,7 @@ from .trash_batch import TrashBatch
 from .document_share import DocumentShare
 from .notification import Notification
 from .favorite import Favorite
+from .favorite_tag import favorite_tags
 from .download_log import DownloadLog
 from .processing_job import ProcessingJob
 from .folder import Folder
@@ -44,6 +45,7 @@ __all__ = [
     "DocumentShare",
     "Notification",
     "Favorite",
+    "favorite_tags",
     "DownloadLog",
     "ProcessingJob",
     "Folder",

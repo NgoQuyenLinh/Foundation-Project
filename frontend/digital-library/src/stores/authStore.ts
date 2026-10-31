@@ -2,6 +2,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { User } from '@/types/user'
+import { useFavoriteStore } from '@/stores/favoriteStore'
 
 interface AuthState {
   token: string | null
@@ -21,14 +22,19 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
 
-      setAuth: (token, user) =>
-        set({ token, user, isAuthenticated: true }),
+      setAuth: (token, user) => {
+        set({ token, user, isAuthenticated: true })
+        useFavoriteStore.getState().loadFavorites()
+      },
 
-      clearAuth: () =>
-        set({ token: null, user: null, isAuthenticated: false }),
+      clearAuth: () => {
+        useFavoriteStore.getState().clearFavorites()
+        set({ token: null, user: null, isAuthenticated: false })
+      },
         
       logout: () => {
         localStorage.removeItem('auth-storage')
+        useFavoriteStore.getState().clearFavorites()
         set({ token: null, user: null, isAuthenticated: false })
       },
 
