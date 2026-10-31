@@ -2,3 +2,14 @@
 .env.local
 .env.*.local
 backend/storage/
+__pycache__/
+*.py[cod]
+venv/
+node_modules/
+.vite/
+dist/
+.env
+.env.local
+.env.*.local
+backend/storage/
+git add .gitignore
