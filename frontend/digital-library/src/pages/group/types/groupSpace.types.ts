@@ -139,7 +139,16 @@ export interface TrashTabProps {
 export interface SimpleShareModalProps {
   title: string;
   documents: Document[];
+  isSharing?: boolean;
   onClose: () => void;
+  onShare?: (documentIds: number[]) => void;
+}
+
+export interface ShareFolderModalProps {
+  folders: Folder[];
+  isSharing?: boolean;
+  onClose: () => void;
+  onShare: (folderId: number) => void;
 }
 
 export interface InviteModalProps {

@@ -175,7 +175,7 @@ export function DocxViewer({
   return (
     <div className="w-full flex flex-col items-center gap-3">
       {/* Thanh công cụ: Tổng số trang & Chọn trang làm ảnh bìa */}
-      {!loading && !error && (
+      {/* {!loading && !error && (
         <div className="w-full max-w-4xl flex flex-wrap items-center justify-between gap-3 bg-white px-4 py-2.5 rounded-lg border border-gray-200 shadow-xs">
           <div className="flex items-center gap-2 text-xs text-gray-600">
             <ImageIcon className="h-4 w-4 text-primary-600" />
@@ -195,7 +195,7 @@ export function DocxViewer({
             />
           )}
         </div>
-      )}
+      )} */}
 
       {/* Vùng hiển thị nội dung tài liệu Word */}
       <div className="w-full min-h-[700px] max-h-[800px] overflow-auto bg-gray-200/70 p-4 rounded-xl flex flex-col items-center custom-scrollbar">

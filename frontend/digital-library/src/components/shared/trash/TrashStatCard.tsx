@@ -1,3 +1,4 @@
+// frontend/digital-library/src/components/shared/trash/TrashStatCard.tsx
 import { cn } from "@/utils/cn";
 
 interface TrashStatCardProps {
@@ -37,4 +38,4 @@ export function TrashStatCard({
       </div>
     </div>
   );
-}
+} 

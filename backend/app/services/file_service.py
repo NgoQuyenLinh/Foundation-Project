@@ -167,7 +167,9 @@ def get_file_url(file_key: str | None) -> str | None:
     clean_key = file_key.lstrip('/')
     if getattr(settings, "STORAGE_BACKEND", "local") != "local" and settings.MINIO_PUBLIC_URL:
         return f"{settings.MINIO_PUBLIC_URL.rstrip('/')}/{clean_key}"
-    return f"/{clean_key}"
+    # return f"/{clean_key}"
+    # Nếu chạy local, trả về URL tương đối để frontend có thể truy cập qua StaticFiles và do chuổi JSON trả về đã có /storage/... nên không cần thêm /storage nữa
+    return f"{clean_key}"
 
 
 def safe_remove(path: str | None) -> None:

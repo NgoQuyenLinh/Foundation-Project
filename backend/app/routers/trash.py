@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +11,8 @@ from app.core.dependencies import get_current_user
 from app.models.document import Document
 from app.models.user import User
 from app.services.file_service import remove_file_if_unreferenced, safe_remove as _safe_remove
+from app.services.document_service import log_activity as _log_activity
+from app.constants.activity_actions import ActivityAction
 
 router = APIRouter(prefix="/trash", tags=["trash"])
 
@@ -33,6 +35,7 @@ async def list_trash(
 @router.post("/{document_id}/restore")
 async def restore_document(
     document_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -50,6 +53,10 @@ async def restore_document(
     document.is_deleted = False
     document.deleted_at = None
     await db.commit()
+    background_tasks.add_task(
+        _log_activity, db, document_id, current_user.id,
+        ActivityAction.RESTORED, "personal", None, None, 0,
+    )
     return {"detail": "Khôi phục tài liệu thành công"}
 
 

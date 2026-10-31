@@ -1,5 +1,45 @@
 // src/components/shared/documents/DocumentDetail/tabs/TabPanels.tsx
 
+import { useQuery } from "@tanstack/react-query";
+import { Activity } from "lucide-react";
+import EmptyState from "@/components/shared/feedback/EmptyState";
+import { activityService } from "@/services/activityService";
+import { formatRelativeDate } from "@/utils/formatDate";
+import { cn } from "@/utils/cn";
+
+const ACTION_LABELS: Record<string, string> = {
+  DOCUMENT_VIEWED: "đã xem tài liệu",
+  DOCUMENT_DOWNLOADED: "đã tải xuống tài liệu",
+  DOCUMENT_SAVED: "đã lưu về cá nhân",
+  DOCUMENT_SHARED: "đã chia sẻ vào nhóm",
+  DOCUMENT_CONTRIBUTED: "đã đóng góp vào kho học liệu",
+  DOCUMENT_RENAMED: "đã đổi tên",
+  DOCUMENT_DELETED: "đã xóa tài liệu",
+  DOCUMENT_RESTORED: "đã khôi phục",
+  TAG_ADDED: "đã gắn nhãn",
+  TAG_REMOVED: "đã gỡ nhãn",
+  BUNDLE_CREATED: "đã tạo gói tài liệu",
+  DOCUMENT_UPLOADED: "đã tải lên tài liệu",
+  view: "đã xem tài liệu",
+  download: "đã tải xuống tài liệu",
+};
+
+const ACTION_COLORS: Record<string, string> = {
+  DOCUMENT_VIEWED: "bg-blue-500",
+  DOCUMENT_DOWNLOADED: "bg-purple-500",
+  DOCUMENT_UPLOADED: "bg-green-500",
+  DOCUMENT_SAVED: "bg-teal-500",
+  DOCUMENT_SHARED: "bg-orange-500",
+  DOCUMENT_CONTRIBUTED: "bg-amber-500",
+  DOCUMENT_DELETED: "bg-red-400",
+  DOCUMENT_RESTORED: "bg-emerald-400",
+  TAG_ADDED: "bg-gray-400",
+  TAG_REMOVED: "bg-gray-300",
+  BUNDLE_CREATED: "bg-purple-300",
+  view: "bg-blue-500",
+  download: "bg-purple-500",
+};
+
 /**
  * TabDescription - Hiển thị mô tả chi tiết của tài liệu
  */
@@ -35,33 +75,73 @@ export function TabNote() {
 /**
  * TabActivity - Lịch sử hoạt động tương tác với tài liệu
  */
-export function TabActivity() {
-  const activities = [
-    { action: "Tải lên", time: "10 phút trước", user: "Tôi" },
-    { action: "Xem", time: "2 giờ trước", user: "Nguyễn Văn A" },
-    { action: "Tải xuống", time: "Hôm qua", user: "Trần Thị B" },
-  ];
+export function TabActivity({ documentId }: { documentId?: number }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["document-activities", documentId],
+    queryFn: () =>
+      activityService.getDocumentActivities(documentId!, { page_size: 20 }),
+    enabled: !!documentId,
+  });
+
+  const activities = data?.items ?? [];
 
   return (
-    <div className="space-y-3">
-      <h3 className="text-sm font-semibold text-gray-900 mb-3">
-        Lịch sử hoạt động
-      </h3>
-      {activities.map((a, i) => (
-        <div
-          key={i}
-          className="flex items-center justify-between text-sm py-2 border-b border-gray-100 last:border-0"
-        >
-          <div>
-            <span className="font-medium text-gray-800">{a.user}</span>
-            <span className="text-gray-500">
-              {" "}
-              đã {a.action.toLowerCase()} tài liệu
-            </span>
-          </div>
-          <span className="text-xs text-gray-400">{a.time}</span>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-900">
+          Lịch sử hoạt động
+        </h3>
+        {activities.length > 0 && (
+          <span className="text-xs text-gray-500">
+            {data?.total ?? activities.length} lượt ghi nhận
+          </span>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3 pt-2">
+          <div className="h-4 w-3/4 rounded bg-gray-100 animate-pulse" />
+          <div className="h-4 w-1/2 rounded bg-gray-100 animate-pulse" />
+          <div className="h-4 w-2/3 rounded bg-gray-100 animate-pulse" />
         </div>
-      ))}
+      ) : activities.length === 0 ? (
+        <EmptyState
+          icon={<Activity className="h-6 w-6" />}
+          title="Chưa có hoạt động nào"
+          description="Tài liệu này chưa có lượt tương tác nào được ghi nhận."
+        />
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {activities.map((a) => {
+            const actionText =
+              ACTION_LABELS[a.action] ||
+              a.action.toLowerCase().replace(/_/g, " ");
+            const dotColor = ACTION_COLORS[a.action] || "bg-gray-400";
+            const actor = a.actor_name || "Người dùng";
+            const relativeTime = formatRelativeDate(a.created_at);
+
+            return (
+              <div
+                key={a.id}
+                className="flex items-center justify-between text-sm py-3"
+              >
+                <div className="flex items-center gap-2.5 min-w-0 pr-3">
+                  <span
+                    className={cn("h-2 w-2 rounded-full shrink-0", dotColor)}
+                  />
+                  <span className="truncate">
+                    <span className="font-medium text-gray-900">{actor}</span>{" "}
+                    <span className="text-gray-600">{actionText}</span>
+                  </span>
+                </div>
+                <span className="text-xs text-gray-400 shrink-0 whitespace-nowrap">
+                  {relativeTime}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

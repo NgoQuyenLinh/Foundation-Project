@@ -14,8 +14,10 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { cn } from "@/utils/cn";
+import { activityService } from "@/services/activityService";
 
 interface DocumentActionCardProps {
+  documentId?: number;
   fileTitle: string;
   fileDownloadUrl: string;
   markdownDownloadUrl: string | null;
@@ -30,6 +32,7 @@ interface DocumentActionCardProps {
 }
 
 export function DocumentActionCard({
+  documentId,
   fileTitle,
   fileDownloadUrl,
   markdownDownloadUrl,
@@ -59,7 +62,15 @@ export function DocumentActionCard({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isDownloadMenuOpen]);
 
-  const handleDownloadOriginal = () => {
+  const handleDownloadOriginal = async () => {
+    if (documentId) {
+      try {
+        await activityService.downloadDocumentFile(documentId, fileTitle);
+        return;
+      } catch (err) {
+        console.error("Lỗi khi tải file qua API, dùng fallback link:", err);
+      }
+    }
     const link = window.document.createElement("a");
     link.href = fileDownloadUrl;
     link.download = fileTitle;
@@ -127,19 +138,19 @@ export function DocumentActionCard({
         {/* Menu chọn định dạng tải về */}
         {isDownloadMenuOpen && markdownDownloadUrl && (
           <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-100 p-2 z-50 animate-in fade-in zoom-in-95 flex flex-col gap-1">
-            <a
-              href={fileDownloadUrl}
-              download={fileTitle}
-              target="_blank"
-              rel="noreferrer"
-              onClick={() => setIsDownloadMenuOpen(false)}
-              className="flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+            <button
+              type="button"
+              onClick={() => {
+                setIsDownloadMenuOpen(false);
+                handleDownloadOriginal();
+              }}
+              className="w-full text-left flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
             >
               <span>Tải về bản gốc</span>
               <span className="text-xs text-gray-400 uppercase">
                 {fileTypeLabel.split(" ")[0]}
               </span>
-            </a>
+            </button>
 
             <a
               href={markdownDownloadUrl}

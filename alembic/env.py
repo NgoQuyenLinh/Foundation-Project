@@ -31,6 +31,7 @@ from app.models import (
     Favorite,
     DownloadLog,
     ProcessingJob,
+    DocumentStats,
 )
 
 # this is the Alembic Config object

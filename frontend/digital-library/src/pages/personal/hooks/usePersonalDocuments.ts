@@ -3,6 +3,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { documentService } from "@/services/documentService";
+import { activityService } from "@/services/activityService";
 import type { DocumentAction } from "@/components/shared/documents/DocumentContextMenu";
 import { getFileExtension } from "@/utils/file";
 import { formatSize } from "@/utils/formatSize";
@@ -102,18 +103,23 @@ export function usePersonalDocuments(
       navigate(`/ca-nhan/tai-lieu/${documentId}`);
     } else if (action === "download") {
       const targetDoc = docData?.items.find((d) => d.id.toString() === documentId);
-      if (targetDoc?.file_path) {
-        const fileDownloadUrl = `${import.meta.env.VITE_API_URL}/${targetDoc.file_path}`;
-        const link = document.createElement("a");
-        link.href = fileDownloadUrl;
-        link.download = targetDoc.title;
-        link.target = "_blank";
-        link.rel = "noreferrer";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+      if (targetDoc) {
+        activityService.downloadDocumentFile(targetDoc.id, targetDoc.title || "document").catch((err) => {
+          console.error("Lỗi khi tải file qua API, fallback:", err);
+          if (targetDoc.file_path) {
+            const fileDownloadUrl = `${import.meta.env.VITE_API_URL}/${targetDoc.file_path}`;
+            const link = document.createElement("a");
+            link.href = fileDownloadUrl;
+            link.download = targetDoc.title;
+            link.target = "_blank";
+            link.rel = "noreferrer";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }
+        });
       } else {
-        alert("Không tìm thấy đường dẫn tệp để tải xuống.");
+        alert("Không tìm thấy thông tin tài liệu để tải xuống.");
       }
     } else if (action === "download-markdown") {
       const targetDoc = docData?.items.find((d) => d.id.toString() === documentId);

@@ -30,7 +30,7 @@ export function PdfViewer({
   return (
     <div className="w-full flex flex-col items-center gap-3">
       {/* Thanh công cụ: Chọn trang làm ảnh bìa PDF */}
-      {handleCover && (
+      {/* {handleCover && (
         <div className="w-full max-w-4xl flex flex-wrap items-center justify-end gap-3 bg-white px-4 py-2.5 rounded-lg border border-gray-200 shadow-xs">
           <DocumentCoverSelector
             variant="page"
@@ -38,7 +38,7 @@ export function PdfViewer({
             isUpdating={isUpdating}
           />
         </div>
-      )}
+      )} */}
 
       {/* Vùng hiển thị PDF qua iframe sử dụng cleanUrl */}
       <iframe

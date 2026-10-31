@@ -23,6 +23,7 @@ import {
 
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { activityService } from "@/services/activityService";
 import { DocumentCard } from "@/components/shared/documents/DocumentCard";
 import {
   DocumentListView,
@@ -257,8 +258,11 @@ export default function BundleDetailPage() {
         break;
       case "download":
         if (child.file_path) {
-          const downloadUrl = `${import.meta.env.VITE_API_URL}/${child.file_path}`;
-          window.open(downloadUrl, "_blank");
+          activityService.downloadDocumentFile(child.id, child.title || "document").catch((err) => {
+            console.error("Lỗi tải file bundle qua API, fallback:", err);
+            const downloadUrl = `${import.meta.env.VITE_API_URL}/${child.file_path}`;
+            window.open(downloadUrl, "_blank");
+          });
         }
         break;
       case "download-markdown": {

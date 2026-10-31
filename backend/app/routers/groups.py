@@ -41,7 +41,8 @@ from app.schemas.group import (
     WorkspaceOut,
 )
 from app.schemas.tag import TagCreate, TagOut, TagUpdate
-from app.services.document_service import create_document_from_upload
+from app.services.document_service import create_document_from_upload, log_activity as _log_activity
+from app.constants.activity_actions import ActivityAction
 from app.services.file_service import (
     checksum_for_file,
     download_r2_to_temp_file,
@@ -282,6 +283,7 @@ async def list_group_documents(
 async def get_group_document(
     group_id: int,
     document_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -319,6 +321,10 @@ async def get_group_document(
         )
         doc_out.bundle_children_count = cnt or 0
 
+    background_tasks.add_task(
+        _log_activity, db, document_id, current_user.id,
+        ActivityAction.VIEWED, "group", group_id, None, 30,
+    )
     return doc_out
 
 @router.get("/groups/{group_id}/documents/{bundle_id}/children", response_model=list[DocumentOut])
@@ -573,6 +579,10 @@ async def upload_group_document(
     await db.commit()
     await db.refresh(document)
     background_tasks.add_task(_process_document_background, document.id, document.file_path, document.file_type or "")
+    background_tasks.add_task(
+        _log_activity, db, document.id, current_user.id,
+        ActivityAction.UPLOADED, "group", group_id, None, 0,
+    )
     return document
 
 
@@ -580,12 +590,17 @@ async def upload_group_document(
 async def share_documents(
     group_id: int,
     payload: ShareDocumentsPayload,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     await require_full_permission(db, group_id, current_user.id)
     for document_id in payload.document_ids:
         await share_document_to_group(db, document_id, group_id, current_user.id)
+        background_tasks.add_task(
+            _log_activity, db, document_id, current_user.id,
+            ActivityAction.SHARED, "group", group_id, None, 0,
+        )
     return ShareResult(shared_count=len(payload.document_ids))
 
 # ==========================================
@@ -719,17 +734,24 @@ async def share_folder(
 async def save_group_document_to_personal(
     group_id: int,
     document_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     await require_member(db, group_id, current_user.id)
-    return await save_to_personal(db, document_id, group_id, current_user.id)
+    saved_doc = await save_to_personal(db, document_id, group_id, current_user.id)
+    background_tasks.add_task(
+        _log_activity, db, document_id, current_user.id,
+        ActivityAction.SAVED, "group", group_id, None, 0,
+    )
+    return saved_doc
 
 
 @router.delete("/groups/{group_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_group_document(
     group_id: int,
     document_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -738,6 +760,10 @@ async def delete_group_document(
     if not document or document.workspace_id != group_id or document.is_deleted:
         raise HTTPException(404, "Không tìm thấy tài liệu")
     await mark_group_document_deleted(db, document)
+    background_tasks.add_task(
+        _log_activity, db, document_id, current_user.id,
+        ActivityAction.DELETED, "group", group_id, None, 0,
+    )
 
 
 @router.get("/groups/{group_id}/members/", response_model=list[MemberOut])
@@ -1258,6 +1284,7 @@ async def list_group_trash(
 async def restore_group_document(
     group_id: int,
     document_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1268,6 +1295,10 @@ async def restore_group_document(
     document.is_deleted = False
     document.deleted_at = None
     await db.commit()
+    background_tasks.add_task(
+        _log_activity, db, document_id, current_user.id,
+        ActivityAction.RESTORED, "group", group_id, None, 0,
+    )
 
 # ==========================================
 # 1. API XÓA THƯ MỤC (Bọc cả 2 route)

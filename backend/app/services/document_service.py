@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import AsyncSessionLocal
 from app.models.document import Document
 from app.models.document_version import DocumentVersion
 from app.models.download_log import DownloadLog
 from app.models.tag import Tag
 from app.services.file_service import checksum_for_file, save_upload_file
+
+UTC = timezone.utc
 
 
 async def create_document_from_upload(
@@ -139,10 +145,79 @@ async def add_document_version(db: AsyncSession, *, document: Document, file_pat
 
 
 async def log_download(db: AsyncSession, *, document_id: int, user_id: int, action: str):
+    """Kept for backward compat — use log_activity instead."""
     log = DownloadLog(document_id=document_id, user_id=user_id, action=action)
     db.add(log)
     await db.flush()
     return log
+
+
+async def _do_log_activity(
+    session: AsyncSession,
+    document_id: int,
+    user_id: int,
+    action: str,
+    workspace_context: str,
+    workspace_id: Optional[int],
+    extra_data: Optional[dict],
+    deduplicate_window_minutes: int,
+) -> None:
+    if deduplicate_window_minutes > 0:
+        cutoff = datetime.now(UTC) - timedelta(minutes=deduplicate_window_minutes)
+        existing = await session.execute(
+            select(DownloadLog.id)
+            .where(
+                DownloadLog.document_id == document_id,
+                DownloadLog.user_id == user_id,
+                DownloadLog.action == action,
+                DownloadLog.created_at > cutoff,
+            )
+            .limit(1)
+        )
+        if existing.scalar_one_or_none() is not None:
+            return
+
+    session.add(DownloadLog(
+        document_id=document_id,
+        user_id=user_id,
+        action=action,
+        workspace_context=workspace_context,
+        workspace_id=workspace_id,
+        extra_data=extra_data or {},
+    ))
+    await session.commit()
+
+
+async def log_activity(
+    db: Optional[AsyncSession] = None,
+    document_id: int = 0,
+    user_id: int = 0,
+    action: str = "",
+    workspace_context: str = "personal",
+    workspace_id: Optional[int] = None,
+    extra_data: Optional[dict] = None,
+    deduplicate_window_minutes: int = 0,
+) -> None:
+    """
+    Ghi activity log. Quản lý session riêng an toàn cho BackgroundTasks.
+    Nếu deduplicate_window_minutes > 0, bỏ qua nếu đã có log
+    cùng (document_id, user_id, action) trong khoảng thời gian đó.
+    """
+    try:
+        async with AsyncSessionLocal() as session:
+            await _do_log_activity(
+                session=session,
+                document_id=document_id,
+                user_id=user_id,
+                action=action,
+                workspace_context=workspace_context,
+                workspace_id=workspace_id,
+                extra_data=extra_data,
+                deduplicate_window_minutes=deduplicate_window_minutes,
+            )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Error logging activity for doc {document_id}: {e}")
 
 
 async def get_document_file_types(db: AsyncSession, owner_id: int) -> list[str]:

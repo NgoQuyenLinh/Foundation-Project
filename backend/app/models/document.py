@@ -16,6 +16,8 @@ if TYPE_CHECKING:
     from .trash_batch import TrashBatch
     from .subject import Subject
     from .document_rating import DocumentRating
+    from .download_log import DownloadLog
+    from .document_stats import DocumentStats
 
 class Document(Base, TimestampMixin):
     __tablename__ = "documents"
@@ -103,3 +105,10 @@ class Document(Base, TimestampMixin):
     notes: Mapped[List["Note"]] = relationship("Note", back_populates="document")
     trash_batch: Mapped[Optional["TrashBatch"]] = relationship("TrashBatch", back_populates="documents")
     ratings: Mapped[List["DocumentRating"]] = relationship("DocumentRating", back_populates="document", cascade="all, delete-orphan", lazy="selectin")
+    activity_logs: Mapped[List["DownloadLog"]] = relationship(
+        "DownloadLog", back_populates="document",
+        cascade="all, delete-orphan", lazy="select"
+    )
+    stats: Mapped[Optional["DocumentStats"]] = relationship(
+        "DocumentStats", back_populates="document", uselist=False
+    )

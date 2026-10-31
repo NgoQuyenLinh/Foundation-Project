@@ -26,7 +26,13 @@ import SettingsTab from "./components/tabs/SettingsTab";
 import TrashTab from "./components/tabs/TrashTab";
 import DocumentsTab from "./components/tabs/DocumentsTab";
 import SimpleShareModal from "./components/modals/SimpleShareModal";
+import ShareFolderModal from "./components/modals/ShareFolderModal";
 import InviteModal from "./components/modals/InviteModal";
+
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { documentService } from "@/services/documentService";
+import { folderService } from "@/services/folderService";
+import { useToastStore } from "@/stores/toastStore";
 
 import { useGroupSpace } from "./hooks/useGroupSpace";
 import { GroupFolderModalContainer } from "./components/modals/GroupFolderModalContainer";
@@ -70,7 +76,6 @@ export default function GroupSpace() {
     workspaceError,
     docsLoading,
     foldersLoading,
-    documents,
     folders,
     members,
     invitations,
@@ -107,6 +112,61 @@ export default function GroupSpace() {
   } = useGroupSpace();
 
   useHighlightElement("highlight_doc");
+
+  const { addToast } = useToastStore();
+
+  const { data: personalDocsData } = useQuery({
+    queryKey: ["personal-documents-share"],
+    queryFn: () => documentService.getAll({ page: 1, page_size: 100 }),
+    enabled: shareModal === "documents",
+  });
+
+  const { data: personalFolders = [] } = useQuery({
+    queryKey: ["personal-folders-share"],
+    queryFn: () => folderService.getAll(),
+    enabled: shareModal === "folder",
+  });
+
+  const shareDocumentsMutation = useMutation({
+    mutationFn: (documentIds: number[]) =>
+      groupService.shareDocuments(groupId, documentIds),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["group-documents", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["group", groupId] });
+      addToast({
+        message: `Đã chia sẻ ${data?.shared_count ?? "các"} tài liệu vào nhóm thành công.`,
+        variant: "success",
+      });
+      setShareModal(null);
+    },
+    onError: () => {
+      addToast({
+        message: "Chia sẻ tài liệu thất bại, vui lòng thử lại.",
+        variant: "error",
+      });
+    },
+  });
+
+  const shareFolderMutation = useMutation({
+    mutationFn: (folderId: number) =>
+      groupService.shareFolder(groupId, folderId),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["group-documents", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["group-folders", groupId] });
+      queryClient.invalidateQueries({ queryKey: ["group", groupId] });
+      addToast({
+        message: `Đã chia sẻ thư mục (${data?.shared_count ?? 0} tài liệu) vào nhóm thành công.`,
+        variant: "success",
+      });
+      setShareModal(null);
+    },
+    onError: () => {
+      addToast({
+        message: "Chia sẻ thư mục thất bại, vui lòng thử lại.",
+        variant: "error",
+      });
+    },
+  });
 
   if (workspaceLoading) {
     return (
@@ -390,15 +450,18 @@ export default function GroupSpace() {
       {shareModal === "documents" && (
         <SimpleShareModal
           title="Chia sẻ từ kho cá nhân"
-          documents={documents}
+          documents={personalDocsData?.items ?? []}
+          isSharing={shareDocumentsMutation.isPending}
           onClose={() => setShareModal(null)}
+          onShare={(docIds) => shareDocumentsMutation.mutate(docIds)}
         />
       )}
       {shareModal === "folder" && (
-        <SimpleShareModal
-          title="Chia sẻ cả thư mục"
-          documents={documents}
+        <ShareFolderModal
+          folders={personalFolders}
+          isSharing={shareFolderMutation.isPending}
           onClose={() => setShareModal(null)}
+          onShare={(folderId) => shareFolderMutation.mutate(folderId)}
         />
       )}
       {shareModal === "invite" && (

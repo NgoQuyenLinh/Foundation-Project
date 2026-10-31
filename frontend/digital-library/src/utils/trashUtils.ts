@@ -1,12 +1,12 @@
-// frontend/src/utils/trashUtils.ts
+// frontend/digital-library/src/utils/trashUtils.ts
 
 import { formatSize } from "@/utils/formatSize";
-import type { TrashBatch } from "@/types/trash";
+import type { TrashBatch, TrashDocument } from "@/types/trash";
 
 export const getTrashSourceLabel = (
   source?: string | null,
   groupName?: string | null
-) => {
+): string => {
   if (source === "group_orphaned") {
     return groupName ? `Từ nhóm ${groupName}` : "Từ nhóm đã giải tán";
   }
@@ -16,54 +16,116 @@ export const getTrashSourceLabel = (
   return "Kho cá nhân";
 };
 
+const formatDocType = (rawType?: string | null): string => {
+  if (!rawType) return "FILE";
+  if (rawType.includes("/")) {
+    const subtype = rawType.split("/")[1]?.toUpperCase() ?? "FILE";
+    return subtype.replace(/^VND\./i, "").replace(/^X-/i, "");
+  }
+  return rawType.toUpperCase();
+};
+
 export const groupDocsIntoBatches = (trashedDocs: any[]): TrashBatch[] => {
-  const grouped = new Map<number, typeof trashedDocs>();
+  if (!trashedDocs || trashedDocs.length === 0) return [];
+
+  const groupedByDay = new Map<string, any[]>();
 
   trashedDocs.forEach((doc: any) => {
-    const batchKey = doc.trash_batch_id ?? doc.id;
-    if (!grouped.has(batchKey)) grouped.set(batchKey, []);
-    grouped.get(batchKey)!.push(doc);
+    const rawDate = doc.deleted_at ?? doc.updated_at ?? Date.now();
+    const d = new Date(rawDate);
+    const validDate = isNaN(d.getTime()) ? new Date() : d;
+
+    const year = validDate.getFullYear();
+    const month = String(validDate.getMonth() + 1).padStart(2, "0");
+    const day = String(validDate.getDate()).padStart(2, "0");
+    const dateKey = `${year}-${month}-${day}`;
+
+    if (!groupedByDay.has(dateKey)) {
+      groupedByDay.set(dateKey, []);
+    }
+    groupedByDay.get(dateKey)!.push({
+      ...doc,
+      _parsedDate: validDate,
+    });
   });
 
-  return Array.from(grouped.entries())
-    .map(([batchId, docs]) => {
-      const firstDoc = docs[0];
-      const deletedAtDate = new Date(
-        firstDoc.deleted_at ?? firstDoc.updated_at ?? Date.now()
-      );
-      const expiresAtDate = new Date(deletedAtDate);
-      expiresAtDate.setDate(expiresAtDate.getDate() + 30);
+  let batchIndex = 1;
 
-      const remainingDays = Math.max(
-        0,
-        Math.ceil((expiresAtDate.getTime() - Date.now()) / 86400000)
-      );
+  const batches: TrashBatch[] = Array.from(groupedByDay.entries()).map(
+    ([dateKey, docs]) => {
+      const [year, month, day] = dateKey.split("-");
+      const shortDate = `${day}/${month}`;
+      const fullDate = `${day}/${month}/${year}`;
 
-      const totalBytes = docs.reduce(
-        (sum: number, d: any) => sum + (d.file_size ?? 0),
-        0
-      );
+      let totalBytes = 0;
+      let minRemainingDays = 30;
+      let earliestExpiresDate = new Date();
+      let latestTimestamp = 0;
 
-      return {
-        id: batchId,
-        deletedAt: deletedAtDate.toLocaleString("vi-VN"),
-        deletedAtTimestamp: deletedAtDate.getTime(),
-        documentCount: docs.length,
-        totalSize: formatSize(totalBytes),
-        source: firstDoc.trash_source ?? "personal",
-        groupName: firstDoc.trash_group_name,
-        expiresAt: expiresAtDate.toLocaleDateString("vi-VN"),
-        remainingDays,
-        documents: docs.map((d: any) => ({
+      const mappedDocuments: TrashDocument[] = docs.map((d: any) => {
+        const deletedAtDate: Date = d._parsedDate;
+        const timestamp = deletedAtDate.getTime();
+        if (timestamp > latestTimestamp) {
+          latestTimestamp = timestamp;
+        }
+
+        const expiresAtDate = new Date(deletedAtDate);
+        expiresAtDate.setDate(expiresAtDate.getDate() + 30);
+
+        const remainingDays = Math.max(
+          0,
+          Math.ceil((expiresAtDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+        );
+
+        const fileSize = d.file_size ?? 0;
+        totalBytes += fileSize;
+
+        if (remainingDays < minRemainingDays) {
+          minRemainingDays = remainingDays;
+          earliestExpiresDate = expiresAtDate;
+        }
+
+        const hours = String(deletedAtDate.getHours()).padStart(2, "0");
+        const minutes = String(deletedAtDate.getMinutes()).padStart(2, "0");
+        const seconds = String(deletedAtDate.getSeconds()).padStart(2, "0");
+
+        return {
           id: d.id,
-          name: d.title,
-          type: d.file_type?.split("/")[1]?.toUpperCase() ?? "FILE",
-          size: formatSize(d.file_size ?? 0),
+          name: d.title || d.name || `Tài liệu #${d.id}`,
+          type: formatDocType(d.file_type),
+          size: formatSize(fileSize),
+          sizeBytes: fileSize,
           source: d.trash_source ?? "personal",
           groupName: d.trash_group_name,
-        })),
-        docIds: docs.map((d: any) => d.id),
+          deletedAt: `${fullDate} ${hours}:${minutes}:${seconds}`,
+          deletedTime: `${hours}:${minutes}`,
+          remainingDays,
+          expiresAt: expiresAtDate.toLocaleDateString("vi-VN"),
+          previewUrl: d.file_url || d.preview_url || d.url || "",
+          originalPath: d.folder_name || d.original_path || "Thư mục cá nhân",
+        };
+      });
+
+      const firstDoc = docs[0];
+
+      return {
+        id: batchIndex++,
+        dateKey,
+        shortDate,
+        deletedAt: fullDate,
+        deletedAtTimestamp: latestTimestamp || new Date(dateKey).getTime(),
+        documentCount: mappedDocuments.length,
+        totalSize: formatSize(totalBytes),
+        totalSizeBytes: totalBytes,
+        remainingDays: minRemainingDays,
+        expiresAt: earliestExpiresDate.toLocaleDateString("vi-VN"),
+        source: firstDoc.trash_source ?? "personal",
+        groupName: firstDoc.trash_group_name,
+        docIds: mappedDocuments.map((doc) => doc.id),
+        documents: mappedDocuments,
       };
-    })
-    .sort((a, b) => b.deletedAtTimestamp - a.deletedAtTimestamp);
+    }
+  );
+
+  return batches.sort((a, b) => b.deletedAtTimestamp - a.deletedAtTimestamp);
 };

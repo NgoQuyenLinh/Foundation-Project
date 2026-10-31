@@ -252,7 +252,7 @@ export function DocumentDetail(props: SharedDocumentDetailProps = {}) {
               />
             )}
             {activeTab === "note" && <TabNote />}
-            {activeTab === "activity" && <TabActivity />}
+            {activeTab === "activity" && <TabActivity documentId={doc.id} />}
           </div>
         </Card>
 
@@ -277,6 +277,7 @@ export function DocumentDetail(props: SharedDocumentDetailProps = {}) {
             />
 
             <DocumentActionCard
+              documentId={doc.id}
               fileTitle={doc.title}
               fileDownloadUrl={fileDownloadUrl}
               markdownDownloadUrl={markdownDownloadUrl}

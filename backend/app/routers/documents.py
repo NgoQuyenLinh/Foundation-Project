@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import io
 import logging
+import math
 import os
 import uuid
 import zipfile
@@ -34,12 +35,17 @@ from app.core.database import AsyncSessionLocal, get_db
 from app.core.dependencies import get_current_user, get_optional_user
 from app.core.security import decode_access_token
 from app.models.document import Document
+from app.models.document_stats import DocumentStats
+from app.models.download_log import DownloadLog
 from app.models.folder import Folder
 from app.models.tag import Tag
 from app.models.user import User
+from app.models.workspace import Workspace
+from app.schemas.activity import ActivityListResponse, ActivityLogResponse, DocumentStatsResponse
 from app.schemas.document import BatchUploadOut, DocumentOut, DocumentTagsUpdate, DocumentUpdate, PaginatedDocuments
 from app.schemas.tag import TagOut
-from app.services.document_service import create_document_from_upload
+from app.services.document_service import create_document_from_upload, log_activity as _log_activity
+from app.constants.activity_actions import ActivityAction
 from app.services.file_service import (
     checksum_for_file,
     download_file_from_r2,
@@ -209,6 +215,17 @@ async def upload_document(
         document.file_path,
         document.file_type or "",
     )
+    background_tasks.add_task(
+        _log_activity,
+        db,
+        document.id,
+        current_user.id,
+        ActivityAction.UPLOADED,
+        "personal",
+        None,
+        None,
+        0,
+    )
 
     return document
 
@@ -356,6 +373,17 @@ async def upload_batch_documents(
                 child.id,
                 child.file_path,
                 child.file_type or "",
+            )
+            background_tasks.add_task(
+                _log_activity,
+                db,
+                child.id,
+                current_user.id,
+                ActivityAction.UPLOADED,
+                "personal",
+                None,
+                None,
+                0,
             )
 
         bundle.file_size = total_size
@@ -533,6 +561,7 @@ async def get_document_file_types(
 @router.get("/{document_id}", response_model=DocumentOut)
 async def get_document(
     document_id: int,
+    background_tasks: BackgroundTasks,
     include_deleted: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -570,12 +599,146 @@ async def get_document(
             )
         )
         doc_out.bundle_children_count = cnt or 0
+
+    background_tasks.add_task(
+        _log_activity, db, document_id, current_user.id,
+        ActivityAction.VIEWED, "personal", None, None, 30,
+    )
     return doc_out
+
+
+@router.get("/{document_id}/activities", response_model=ActivityListResponse)
+async def get_document_activities(
+    document_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    action: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    doc = (
+        await db.execute(select(Document).where(Document.id == document_id))
+    ).scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
+
+    # Kiểm tra phân quyền:
+    # 1. Owner của document
+    # 2. Hoặc nếu tài liệu thuộc workspace, current_user là owner của workspace đó
+    # 3. Hoặc có log trong nhóm mà current_user là owner của nhóm đó
+    has_permission = False
+    if doc.owner_id == current_user.id:
+        has_permission = True
+    elif doc.workspace_id:
+        ws = (
+            await db.execute(select(Workspace).where(Workspace.id == doc.workspace_id))
+        ).scalar_one_or_none()
+        if ws and ws.owner_id == current_user.id:
+            has_permission = True
+
+    if not has_permission:
+        group_ws_check = (
+            await db.execute(
+                select(Workspace.id)
+                .join(DownloadLog, DownloadLog.workspace_id == Workspace.id)
+                .where(
+                    DownloadLog.document_id == document_id,
+                    DownloadLog.workspace_context == "group",
+                    Workspace.owner_id == current_user.id,
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if group_ws_check:
+            has_permission = True
+
+    if not has_permission:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền xem lịch sử tài liệu này")
+
+    base_query = (
+        select(DownloadLog, User.full_name, User.username)
+        .outerjoin(User, DownloadLog.user_id == User.id)
+        .where(DownloadLog.document_id == document_id)
+    )
+    count_query = (
+        select(func.count(DownloadLog.id))
+        .where(DownloadLog.document_id == document_id)
+    )
+
+    if action:
+        base_query = base_query.where(DownloadLog.action == action)
+        count_query = count_query.where(DownloadLog.action == action)
+
+    total = (await db.execute(count_query)).scalar() or 0
+
+    items_query = (
+        base_query
+        .order_by(DownloadLog.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    rows = (await db.execute(items_query)).all()
+
+    items = [
+        ActivityLogResponse(
+            id=log.id,
+            document_id=log.document_id,
+            user_id=log.user_id,
+            action=log.action,
+            workspace_context=log.workspace_context,
+            workspace_id=log.workspace_id,
+            extra_data=log.extra_data or {},
+            created_at=log.created_at,
+            actor_name=full_name or username or "Unknown",
+            document_title=doc.title,
+        )
+        for log, full_name, username in rows
+    ]
+
+    total_pages = math.ceil(total / page_size) if total > 0 else 0
+
+    return ActivityListResponse(
+        items=items,
+        total=total,
+        page=page,
+        total_pages=total_pages,
+    )
+
+
+@router.get("/{document_id}/stats", response_model=DocumentStatsResponse)
+async def get_document_stats_endpoint(
+    document_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    doc = (
+        await db.execute(select(Document).where(Document.id == document_id))
+    ).scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
+
+    stats = (
+        await db.execute(select(DocumentStats).where(DocumentStats.document_id == document_id))
+    ).scalar_one_or_none()
+
+    if not stats:
+        return DocumentStatsResponse(
+            document_id=document_id,
+            view_count=0,
+            download_count=0,
+            save_count=0,
+            share_count=0,
+            unique_viewers=0,
+            trending_score=0.0,
+            last_activity_at=None,
+        )
+    return DocumentStatsResponse.model_validate(stats)
 
 
 @router.get("/{document_id}/file")
 async def get_document_file(
     document_id: int,
+    background_tasks: BackgroundTasks,
     download: bool = Query(False),
     token: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
@@ -617,6 +780,15 @@ async def get_document_file(
 
     disposition = "attachment" if download else "inline"
     encoded_filename = quote(filename)
+
+    if current_user:
+        act = ActivityAction.DOWNLOADED if download else ActivityAction.VIEWED
+        w_ctx = "group" if doc.workspace_id else "personal"
+        dedup = 0 if download else 30
+        background_tasks.add_task(
+            _log_activity, db, document_id, current_user.id,
+            act, w_ctx, doc.workspace_id, None, dedup,
+        )
 
     # 1. Thử đọc từ local disk
     if os.path.exists(file_path):
@@ -915,6 +1087,17 @@ async def add_files_to_bundle(
                 child.file_path,
                 child.file_type or "",
             )
+            background_tasks.add_task(
+                _log_activity,
+                db,
+                child.id,
+                current_user.id,
+                ActivityAction.UPLOADED,
+                "personal",
+                None,
+                None,
+                0,
+            )
 
         bundle.file_size = (bundle.file_size or 0) + added_size
         await db.commit()
@@ -997,6 +1180,7 @@ async def add_from_personal_to_bundle(
 @router.get("/{bundle_id}/download-zip")
 async def download_bundle_zip(
     bundle_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1042,6 +1226,10 @@ async def download_bundle_zip(
 
     zip_buffer.seek(0)
     safe_name = bundle.title.replace(' ', '_').replace('/', '_')
+    background_tasks.add_task(
+        _log_activity, db, bundle_id, current_user.id,
+        ActivityAction.DOWNLOADED, "personal", None, None, 0,
+    )
     return StreamingResponse(
         zip_buffer,
         media_type="application/zip",
@@ -1141,6 +1329,7 @@ async def update_document_thumbnail(
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def soft_delete_document(
     document_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1172,6 +1361,11 @@ async def soft_delete_document(
             child.deleted_at = now
 
     await db.commit()
+
+    background_tasks.add_task(
+        _log_activity, db, document_id, current_user.id,
+        ActivityAction.DELETED, "personal", None, None, 0,
+    )
 
 
 @router.delete("/{document_id}/tags/{tag_id}", response_model=DocumentOut)

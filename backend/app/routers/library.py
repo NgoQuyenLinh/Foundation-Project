@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import select, func, or_, and_, desc, asc, insert, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +28,8 @@ from app.models.document_tag import document_tags
 from app.models.tag import Tag
 from app.models.notification import Notification
 from app.utils.checksum import compute_file_checksum
+from app.services.document_service import log_activity as _log_activity
+from app.constants.activity_actions import ActivityAction
 from app.schemas.library import (
     FacultyCreate,
     FacultyLibraryOut,
@@ -297,7 +299,9 @@ async def get_documents_by_subject(
 @router.get("/documents/{document_id}", response_model=CommunityDocumentOut)
 async def get_community_document(
     document_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Lấy chi tiết một tài liệu công khai."""
     rating_sq = (
@@ -348,6 +352,12 @@ async def get_community_document(
 
     doc, subj_name, fac_id, fac_name, full_name, username, r_avg, r_count, d_count = row
     meta = doc.metadata_ or {}
+    if current_user:
+        background_tasks.add_task(
+            _log_activity, db, document_id, current_user.id,
+            ActivityAction.VIEWED, "library", None, None, 30,
+        )
+
     return CommunityDocumentOut(
         id=doc.id,
         title=doc.title,
@@ -373,6 +383,7 @@ async def get_community_document(
 async def download_community_document(
     document_id: int,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
@@ -383,16 +394,10 @@ async def download_community_document(
 
     # Ghi log nếu người dùng đã đăng nhập
     if current_user:
-        ip_addr = request.client.host if request.client else None
-        user_agent = request.headers.get("user-agent")
-        log_entry = DownloadLog(
-            user_id=current_user.id,
-            document_id=doc.id,
-            ip_address=ip_addr,
-            user_agent=user_agent,
+        background_tasks.add_task(
+            _log_activity, db, document_id, current_user.id,
+            ActivityAction.DOWNLOADED, "library", None, None, 0,
         )
-        db.add(log_entry)
-        await db.commit()
 
     file_path = doc.file_path
     if not file_path:
@@ -620,6 +625,7 @@ async def get_document_ratings(
 @router.post("/documents/{document_id}/save-to-personal")
 async def save_community_document_to_personal(
     document_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -669,6 +675,10 @@ async def save_community_document_to_personal(
 
     await db.commit()
     await db.refresh(new_doc)
+    background_tasks.add_task(
+        _log_activity, db, document_id, current_user.id,
+        ActivityAction.SAVED, "library", None, None, 0,
+    )
     return {
         "id": new_doc.id,
         "title": new_doc.title,
@@ -783,6 +793,7 @@ async def delete_rating(
 @router.post("/submissions/", response_model=SubmissionOut)
 async def submit_document_to_library(
     payload: SubmissionCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -832,6 +843,10 @@ async def submit_document_to_library(
 
     await db.commit()
     await db.refresh(submission)
+    background_tasks.add_task(
+        _log_activity, db, payload.source_document_id, current_user.id,
+        ActivityAction.CONTRIBUTED, "library", None, None, 0,
+    )
 
     return SubmissionOut(
         id=submission.id,
