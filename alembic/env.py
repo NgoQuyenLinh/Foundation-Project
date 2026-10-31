@@ -64,11 +64,15 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
+    connect_args = {}
+    if "neon.tech" in settings.DATABASE_URL or "sslmode=require" in settings.DATABASE_URL or "ssl=true" in settings.DATABASE_URL.lower():
+        connect_args["ssl"] = True
+
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        connect_args={"ssl": True},          # Bắt buộc với Neon + asyncpg
+        connect_args=connect_args,
     )
 
     async with connectable.connect() as connection:
