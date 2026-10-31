@@ -1,3 +1,4 @@
+import { useFavoriteStore } from "@/stores/favoriteStore";
 // src/pages/personal/hooks/usePersonalDocuments.ts
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -148,6 +149,11 @@ export function usePersonalDocuments(
       if (docToContribute) {
         setContributeDoc({ id: docToContribute.id, title: docToContribute.title });
         setIsContributeModalOpen(true);
+      }
+    } else if (action === "favorite") {
+      const docNumId = Number(documentId);
+      if (!isNaN(docNumId)) {
+        useFavoriteStore.getState().toggleFavorite(docNumId);
       }
     } else if (action === "delete") {
       if (window.confirm("Xóa tài liệu này? Bạn có thể khôi phục trong thùng rác.")) {

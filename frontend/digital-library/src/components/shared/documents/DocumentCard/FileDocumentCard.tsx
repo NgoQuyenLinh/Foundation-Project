@@ -4,7 +4,9 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { FileIcon } from "@/components/shared/documents/FileIcon";
+import { Heart } from "lucide-react";
 import { DocumentContextMenu } from "@/components/shared/documents/DocumentContextMenu";
+import { useFavoriteStore } from "@/stores/favoriteStore";
 import type { DocumentCardProps } from "./DocumentCard";
 import { getThumbnailUrl } from "@/utils/getThumbnailUrl";
 import { useHoverExpand } from "@/hooks/useHoverExpand";
@@ -213,6 +215,17 @@ export function FileDocumentCard({
   const ext = getFileExtension(document.extension || document.type);
   const theme = FILE_TYPE_THEMES[ext] || DEFAULT_THEME;
 
+  const docNumId = Number(document.id);
+  const isFavorite = useFavoriteStore((state) => (!isNaN(docNumId) ? state.isFavorite(docNumId) : false));
+  const toggleFavorite = useFavoriteStore((state) => state.toggleFavorite);
+
+  const handleFavoriteClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isNaN(docNumId)) {
+      await toggleFavorite(docNumId);
+    }
+  };
+
   const thumbnailUrl = !imageError
     ? getThumbnailUrl(document.thumbnail_path)
     : null;
@@ -262,7 +275,7 @@ export function FileDocumentCard({
         "group flex h-full w-full flex-col overflow-hidden rounded-xl border bg-white transition-shadow duration-300",
         isExpanded
           ? "border-gray-200 shadow-2xl"
-          : `border-gray-200/80 shadow-xs hover:shadow-md ${theme.border}`,
+          : isFavorite ? "border-rose-300 ring-1 ring-rose-200 shadow-rose-50" : `border-gray-200/80 shadow-xs hover:shadow-md ${theme.border}`,
       )}
     >
       {/* Khung Preview ngoài (Cố định vị trí Badge & Hint) */}
@@ -384,16 +397,38 @@ export function FileDocumentCard({
             </div>
 
             {!isExpanded && (
-              <div
-                className="relative z-50 shrink-0 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover:opacity-100"
-                onClick={(e) => e.stopPropagation()}
-              >
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleFavoriteClick}
+                  title={isFavorite ? "Bỏ yêu thích" : "Thêm vào yêu thích"}
+                  className={cn(
+                    "p-1 rounded-full transition-all duration-150 focus:outline-none",
+                    isFavorite
+                      ? "opacity-100 text-rose-500 hover:text-rose-600 hover:bg-rose-50"
+                      : "opacity-0 group-hover:opacity-100 text-gray-400 hover:text-rose-500 hover:bg-gray-100"
+                  )}
+                >
+                  <Heart
+                    className={cn(
+                      "h-4 w-4",
+                      isFavorite ? "fill-rose-500 text-rose-500" : ""
+                    )}
+                  />
+                </button>
+
+                <div
+                  className="relative z-50 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover:opacity-100"
+                  onClick={(e) => e.stopPropagation()}
+                >
                 <DocumentContextMenu
+                  documentId={document.id}
                   markdownPath={document.markdownPath || document.markdown_path}
                   onAction={handleAction}
                   allowedActions={allowedActions}
                   extraItems={extraItems}
                 />
+                </div>
               </div>
             )}
           </div>
