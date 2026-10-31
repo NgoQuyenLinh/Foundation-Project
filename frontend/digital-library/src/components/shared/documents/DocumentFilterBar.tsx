@@ -47,6 +47,10 @@ interface DocumentFilterBarProps {
   selectedUploaderId?: number | null;
   setSelectedUploaderId?: (id: number | null) => void;
 
+  // Sort Filter
+  selectedSort?: string;
+  setSelectedSort?: (sort: string) => void;
+
   // Actions
   onUploadClick?: () => void;
   showUploadButton?: boolean;
@@ -68,6 +72,8 @@ export function DocumentFilterBar({
   setSelectedUploadTime,
   selectedAccessTime,
   setSelectedAccessTime,
+  selectedSort,
+  setSelectedSort,
   members,
   selectedUploaderId,
   setSelectedUploaderId,
@@ -131,6 +137,21 @@ export function DocumentFilterBar({
             options={TIME_FILTER_OPTIONS}
             selectedValue={selectedAccessTime ?? null}
             onChange={(val) => setSelectedAccessTime(val as string | null)}
+          />
+        )}
+
+        {/* Sắp xếp tài liệu */}
+        {setSelectedSort && (
+          <DynamicFilterDropdown
+            label="Sắp xếp"
+            options={[
+              { value: "trending", label: "🔥 Nổi bật" },
+              { value: "views", label: "👁️ Lượt xem" },
+              { value: "newest", label: "🕒 Mới nhất" },
+              { value: "title", label: "🔤 Tên A-Z" },
+            ]}
+            selectedValue={selectedSort ?? "trending"}
+            onChange={(val) => setSelectedSort((val as string) || "trending")}
           />
         )}
 

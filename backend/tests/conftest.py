@@ -22,7 +22,13 @@ class FakeResult:
     def __init__(self, value=None):
         self.value = value
 
+    def scalar(self):
+        return self.value
+
     def scalar_one_or_none(self):
+        return self.value
+
+    def scalar_one(self):
         return self.value
 
     def scalars(self):
@@ -30,6 +36,9 @@ class FakeResult:
 
     def mappings(self):
         return SimpleNamespace(all=lambda: self.value or [])
+
+    def all(self):
+        return self.value or []
 
 
 class FakeSession:

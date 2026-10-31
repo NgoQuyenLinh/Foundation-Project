@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import type { ViewMode } from '@/components/shared/feedback/ViewToggle'
 
+const VALID_MODES: ViewMode[] = ['grid', 'list', 'detail']
+
 /**
  * Hook to persist view mode preference in localStorage
  * @param storageKey - localStorage key to use (default: 'document_view_mode')
@@ -13,8 +15,8 @@ export function useViewPreference(storageKey: string = 'document_view_mode') {
 
   // Load from localStorage on mount
   useEffect(() => {
-    const saved = localStorage.getItem(storageKey)
-    if (saved === 'list' || saved === 'grid') {
+    const saved = localStorage.getItem(storageKey) as ViewMode | null
+    if (saved && VALID_MODES.includes(saved)) {
       setViewMode(saved)
     }
     setIsLoaded(true)

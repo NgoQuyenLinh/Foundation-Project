@@ -99,6 +99,8 @@ export function PersonalDocuments() {
     setSelectedUploadTime,
     selectedAccessTime,
     setSelectedAccessTime,
+    selectedSort,
+    setSelectedSort,
     filteredDocuments: filteredDocCards,
     filteredFolders,
   } = usePersonalDocuments(selectedFolderId, folders);
@@ -136,6 +138,8 @@ export function PersonalDocuments() {
         setSelectedUploadTime={setSelectedUploadTime}
         selectedAccessTime={selectedAccessTime}
         setSelectedAccessTime={setSelectedAccessTime}
+        selectedSort={selectedSort}
+        setSelectedSort={setSelectedSort}
         onUploadClick={() => setIsUploadOpen(true)}
         onManageTags={openManageModal}
       />

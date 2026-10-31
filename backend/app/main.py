@@ -24,6 +24,7 @@ from app.routers.trash import router as trash_router
 from app.routers.users import router as users_router
 from app.routers.workspaces import router as workspaces_router
 from app.routers.library import router as library_router
+from app.routers.stats import router as stats_router
 
 app = FastAPI(
     title="Thư Viện Số - Quản Lí Tài Liệu",
@@ -37,6 +38,7 @@ os.makedirs("storage/personal", exist_ok=True)
 os.makedirs("storage/groups", exist_ok=True)
 os.makedirs("storage/orphaned", exist_ok=True)
 os.makedirs("storage/community", exist_ok=True)
+os.makedirs("storage/markdowns", exist_ok=True)
 app.mount("/storage", StaticFiles(directory="storage"), name="storage")
 
 app.add_middleware(
@@ -48,6 +50,7 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
         "https://macbook-pro-2.taile4a1e8.ts.net",
+        "https://foundation-project-murex.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -73,6 +76,7 @@ app.include_router(folders_router)
 app.include_router(groups_router)
 app.include_router(workspace_tags.router)
 app.include_router(library_router)
+app.include_router(stats_router)
 
 
 @app.on_event("startup")

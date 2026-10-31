@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/utils/cn";
 
 export interface DropdownItem {
@@ -16,15 +17,20 @@ export interface DropdownProps {
 
 const Dropdown = ({ trigger, items, align = "right" }: DropdownProps) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [shouldFlipLeft, setShouldFlipLeft] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Xử lý click ra ngoài để đóng menu
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
+      // Phải check cả dropdownRef (nút bấm) VÀ menuRef (menu portal) 
+      // vì menu giờ đã nằm ngoài DOM của dropdownRef
       if (
         dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
+        !dropdownRef.current.contains(event.target as Node) &&
+        menuRef.current &&
+        !menuRef.current.contains(event.target as Node)
       ) {
         setIsOpen(false);
       }
@@ -38,13 +44,26 @@ const Dropdown = ({ trigger, items, align = "right" }: DropdownProps) => {
     };
   }, [isOpen]);
 
+  // Tính toán vị trí hiển thị khi mở menu
   useEffect(() => {
     if (!isOpen || !dropdownRef.current) return;
 
-    const triggerRect = dropdownRef.current.getBoundingClientRect();
-    const menuWidth = menuRef.current?.offsetWidth ?? 208;
-    setShouldFlipLeft(triggerRect.right + menuWidth > window.innerWidth);
-  }, [isOpen]);
+    const rect = dropdownRef.current.getBoundingClientRect();
+    const menuWidth = 208; // Dựa trên min-w-[208px]
+    
+    // Mặc định canh trái
+    let calculatedLeft = rect.left;
+    
+    // Nếu cài đặt canh phải hoặc bị tràn màn hình bên phải thì lật lại
+    if (align === "right" || rect.left + menuWidth > window.innerWidth) {
+      calculatedLeft = rect.right - menuWidth;
+    }
+
+    setCoords({
+      top: rect.bottom + 8, // Cách nút bấm 8px (tương đương mt-2)
+      left: calculatedLeft,
+    });
+  }, [isOpen, align]);
 
   return (
     <div className="relative inline-block text-left" ref={dropdownRef}>
@@ -52,12 +71,15 @@ const Dropdown = ({ trigger, items, align = "right" }: DropdownProps) => {
         {trigger}
       </div>
 
-      {isOpen && (
+      {isOpen && typeof document !== "undefined" && createPortal(
         <div
           ref={menuRef}
+          style={{
+            top: coords.top,
+            left: coords.left,
+          }}
           className={cn(
-            "absolute z-50 mt-2 min-w-[208px] rounded-lg border border-gray-100 bg-white py-1 shadow-lg",
-            shouldFlipLeft || align === "right" ? "right-0" : "left-0"
+            "fixed z-[9999] min-w-[208px] rounded-lg border border-gray-100 bg-white py-1 shadow-lg"
           )}
         >
           {items.map((item, index) => (
@@ -82,7 +104,8 @@ const Dropdown = ({ trigger, items, align = "right" }: DropdownProps) => {
               {item.label}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

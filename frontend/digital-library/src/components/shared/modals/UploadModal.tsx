@@ -1,15 +1,18 @@
 // frontend/digital-library/src/components/shared/UploadModal.tsx
 
 import { useState, useRef } from "react";
+import axios from "axios";
 import { X, Upload, FileText, AlertCircle, ArrowLeft, Package } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
+import { useToastStore } from "@/stores/toastStore";
 import { cn } from "@/utils/cn";
 import { mergeImagesToPdf } from "@/utils/pdfBuilder";
 import { documentService } from "@/services/documentService";
 import { groupService } from "@/services/groupService";
 import { formatSize } from "@/utils/formatSize";
 import { TagSelector, type TagItem } from "../feedback/TagSelector";
+import { generateDocxThumbnail, isDocxFile } from "@/utils/docxThumbnail";
 export interface UploadModalProps {
   onClose: () => void;
   availableTags?: TagItem[];
@@ -26,10 +29,29 @@ const ACCEPTED_MIME = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.ms-powerpoint",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "image/jpeg",
   "image/png",
   "image/webp",
   "text/plain",
+  "text/x-python",
+  "text/javascript",
+  "text/typescript",
+  "text/x-c",
+  "text/x-c++",
+  "text/x-java-source",
+  "application/json",
+  "text/html",
+  "text/css",
+  "text/markdown",
+  "text/x-sql",
+  "text/x-shellscript",
+  ".py", ".js", ".ts", ".jsx", ".tsx", ".cpp", ".c", ".h", ".java", ".cs", ".go",
+  ".rs", ".php", ".rb", ".swift", ".kt", ".scala", ".r", ".m", ".sql", ".yaml",
+  ".yml", ".toml", ".csv", ".html", ".css", ".scss", ".sass", ".less", ".svelte",
+  ".vue", ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd", ".md", ".mdx",
+  ".rst", ".tex", ".env", ".gitignore", ".dockerignore", ".mk", ".xlsx", ".xls"
 ];
 const MAX_MB = 50;
 
@@ -43,8 +65,30 @@ export function UploadModal({
   groupId,
 }: UploadModalProps) {
   const queryClient = useQueryClient();
+  const { addToast } = useToastStore();
   const inputRef = useRef<HTMLInputElement>(null);
   const batchInputRef = useRef<HTMLInputElement>(null);
+
+  // State kiểm tra trùng trong thùng rác
+  const [trashConflict, setTrashConflict] = useState<{
+    documentId: number;
+    title: string;
+  } | null>(null);
+
+  const restoreMutation = useMutation({
+    mutationFn: (docId: number) =>
+      documentService.restoreOne(docId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["documents"] });
+      queryClient.invalidateQueries({ queryKey: ["trash"] });
+      setTrashConflict(null);
+      addToast({
+        message: "Đã khôi phục tài liệu từ thùng rác.",
+        variant: "success",
+      });
+      onClose();
+    },
+  });
 
   // Tab mode
   const [uploadMode, setUploadMode] = useState<"single" | "batch">("single");
@@ -77,8 +121,13 @@ export function UploadModal({
 
     const newFiles = Array.from(selectedFiles);
 
-    const invalid = newFiles.find((f) => !ACCEPTED_MIME.includes(f.type));
-    if (invalid) return setError("Tồn tại định dạng file không được hỗ trợ.");
+    const invalid = newFiles.find((f) => {
+      const isAcceptedMime = ACCEPTED_MIME.includes(f.type);
+      const isAcceptedExt = ACCEPTED_MIME.some(ext => ext.startsWith('.') && f.name.toLowerCase().endsWith(ext));
+      // Trình duyệt có thể trả f.type rỗng cho file code, nên cho qua nếu đuôi file đúng hoặc mime rỗng
+      return !isAcceptedMime && !isAcceptedExt && f.type !== "";
+    });
+    if (invalid) return setError("Tồn tại định dạng file không được hỗ trợ: " + invalid.name);
 
     const oversized = newFiles.find((f) => f.size > MAX_MB * 1024 * 1024);
     if (oversized) return setError(`File "${oversized.name}" vượt quá ${MAX_MB}MB.`);
@@ -139,15 +188,40 @@ export function UploadModal({
         fd.append("description", description.trim());
       }
 
+      if (isDocxFile(fileToUpload)) {
+        try {
+          const thumbnailBase64 = await generateDocxThumbnail(fileToUpload, 1);
+          if (thumbnailBase64) {
+            fd.append("thumbnail_path", thumbnailBase64);
+          }
+        } catch (thumbErr) {
+          console.warn("Không thể tự động tạo ảnh bìa DOCX:", thumbErr);
+        }
+      }
+
       await onUpload(fd, selectedTagIds);
       onClose();
     } catch (err: any) {
       setIsProcessingPdf(false);
-      setError(
-        err?.response?.status === 409
-          ? "Tài liệu này đã tồn tại trong thư viện của bạn"
-          : "Tải lên thất bại, vui lòng thử lại"
-      );
+      if (axios.isAxiosError(err) && err.response?.status === 409) {
+        const data = err.response.data?.detail ?? err.response.data;
+        if (data?.code === "IN_TRASH") {
+          setTrashConflict({
+            documentId: data.document_id,
+            title: data.title ?? "tài liệu này",
+          });
+          return;
+        }
+        if (data?.code === "DUPLICATE") {
+          addToast({
+            message: "Tài liệu đã tồn tại trong kho của bạn.",
+            variant: "warning",
+          });
+          setError("Tài liệu đã tồn tại trong kho của bạn.");
+          return;
+        }
+      }
+      setError("Tải lên thất bại, vui lòng thử lại");
     }
   };
 
@@ -190,12 +264,20 @@ export function UploadModal({
       fd.append("tag_ids", selectedBatchTagIds.join(","));
       batchFiles.forEach((file) => fd.append("files", file));
 
+      let result: any;
       if (onBatchUpload) {
-        await onBatchUpload(fd);
+        result = await onBatchUpload(fd);
       } else if (groupId) {
-        await groupService.uploadBatchDocuments(Number(groupId), fd);
+        result = await groupService.uploadBatchDocuments(Number(groupId), fd);
       } else {
-        await documentService.uploadBatch(fd);
+        result = await documentService.uploadBatch(fd);
+      }
+
+      if (result?.skipped?.length > 0) {
+        addToast({
+          message: `${result.skipped.length} file đã tồn tại, bỏ qua.`,
+          variant: "warning",
+        });
       }
 
       await queryClient.invalidateQueries({ queryKey: ["documents"] });
@@ -670,6 +752,37 @@ export function UploadModal({
           </div>
         )}
       </div>
+
+      {trashConflict && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-4">
+          <div className="bg-white rounded-xl shadow-lg p-6 max-w-sm w-full flex flex-col gap-4">
+            <h3 className="text-base font-semibold text-gray-900">
+              Tài liệu đang trong thùng rác
+            </h3>
+            <p className="text-sm text-gray-500">
+              "<span className="font-medium text-gray-700">
+                {trashConflict.title}
+              </span>" đang ở trong thùng rác. Bạn muốn khôi phục lại không?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setTrashConflict(null)}
+              >
+                Hủy
+              </Button>
+              <Button
+                size="sm"
+                disabled={restoreMutation.isPending}
+                onClick={() => restoreMutation.mutate(trashConflict.documentId)}
+              >
+                {restoreMutation.isPending ? "Đang khôi phục..." : "Khôi phục"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

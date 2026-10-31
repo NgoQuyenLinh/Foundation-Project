@@ -41,6 +41,7 @@ export interface Document {
   category_id?: number;
   description?: string;
   thumbnail_path?: string | null;
+  markdown_path?: string | null;
   content?: string | null;
   tags?: Tag[];
   is_deleted?: boolean;
@@ -53,6 +54,11 @@ export interface Document {
   is_bundle?: boolean;
   bundle_parent_id?: number | null;
   bundle_children_count?: number | null;
+  trending_score?: number;
+  view_count?: number;
+  download_count?: number;
+  share_count?: number;
+  personal_view_count?: number;
 }
 
 export interface PaginatedDocuments {

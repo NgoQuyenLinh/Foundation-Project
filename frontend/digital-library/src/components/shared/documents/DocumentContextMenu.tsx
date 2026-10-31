@@ -10,7 +10,8 @@ import {
   Trash2,
   MoreVertical,
   ExternalLink,
-  Upload 
+  Upload,
+  FileText // Thêm icon cho markdown nếu muốn
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useAuthStore } from "@/stores/authStore";
@@ -18,6 +19,7 @@ import { useAuthStore } from "@/stores/authStore";
 export type DocumentAction = 
   | "view" 
   | "download" 
+  | "download-markdown" // Thêm action mới
   | "share" 
   | "favorite" 
   | "rename" 
@@ -39,9 +41,15 @@ export interface DocumentContextMenuProps {
   onAction: (action: DocumentAction | string) => void;
   allowedActions?: DocumentAction[];
   extraItems?: DocumentMenuItem[];
+  markdownPath?: string | null; // <-- Bổ sung prop này
 }
 
-export function DocumentContextMenu({ onAction, allowedActions, extraItems = [] }: DocumentContextMenuProps) {
+export function DocumentContextMenu({
+  onAction,
+  allowedActions,
+  extraItems = [],
+  markdownPath,
+}: DocumentContextMenuProps) {
   const { isAuthenticated } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; right: number }>({
@@ -52,7 +60,6 @@ export function DocumentContextMenu({ onAction, allowedActions, extraItems = [] 
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Tính tọa độ vị trí của nút 3 chấm để hiển thị menu fixed chính xác
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isOpen && buttonRef.current) {
@@ -65,7 +72,6 @@ export function DocumentContextMenu({ onAction, allowedActions, extraItems = [] 
     setIsOpen((prev) => !prev);
   };
 
-  // Tự động đóng menu khi click ra ngoài, cuộn trang hoặc đổi kích thước màn hình
   useEffect(() => {
     if (!isOpen) return;
 
@@ -98,7 +104,11 @@ export function DocumentContextMenu({ onAction, allowedActions, extraItems = [] 
 
   const DEFAULT_ITEMS: DocumentMenuItem[] = [
     { action: "view", icon: <ExternalLink className="h-4 w-4" />, label: "Mở trong thẻ mới" },
-    { action: "download", icon: <Download className="h-4 w-4" />, label: "Tải xuống" },
+    { action: "download", icon: <Download className="h-4 w-4" />, label: "Tải xuống bản gốc" },
+    // Nếu tài liệu có markdown_path, tự động hiển thị thêm tùy chọn này
+    ...(markdownPath 
+      ? [{ action: "download-markdown", icon: <FileText className="h-4 w-4 text-primary-600" />, label: "Tải xuống Markdown (.md)" }] 
+      : []),
     { action: "share", icon: <Share2 className="h-4 w-4" />, label: "Chia sẻ" },
     { action: "favorite", icon: <Heart className="h-4 w-4" />, label: "Thêm vào Yêu thích" },
     { action: "rename", icon: <Edit2 className="h-4 w-4" />, label: "Đổi tên" },
@@ -137,7 +147,6 @@ export function DocumentContextMenu({ onAction, allowedActions, extraItems = [] 
         <MoreVertical className="h-5 w-5" />
       </Button>
 
-      {/* Render Menu trực tiếp ra document.body qua createPortal */}
       {isOpen &&
         createPortal(
           <div
@@ -147,15 +156,16 @@ export function DocumentContextMenu({ onAction, allowedActions, extraItems = [] 
               top: `${coords.top}px`,
               right: `${coords.right}px`,
             }}
-            className="z-[9999] min-w-[190px] rounded-xl border border-gray-100 bg-white p-1.5 shadow-lg animate-in fade-in zoom-in-95"
+            className="z-[9999] min-w-[210px] rounded-xl border border-gray-100 bg-white p-1.5 shadow-lg animate-in fade-in zoom-in-95"
             onClick={(e) => e.stopPropagation()}
           >
             {displayItems.map((item, index) => {
               const isDanger = item.danger;
               const isContribute = item.action === "contribute";
+              const isMarkdownDownload = item.action === "download-markdown";
               return (
                 <div key={item.action}>
-                  {((isDanger && index > 0) || (isContribute && index > 0)) && (
+                  {((isDanger && index > 0) || (isContribute && index > 0) || (isMarkdownDownload && index > 0)) && (
                     <div className="my-1 h-px bg-gray-100" />
                   )}
                   <button
@@ -172,7 +182,7 @@ export function DocumentContextMenu({ onAction, allowedActions, extraItems = [] 
                     className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
                       isDanger
                         ? "text-red-600 hover:bg-red-50"
-                        : isContribute
+                        : isContribute || isMarkdownDownload
                         ? "text-primary-700 hover:bg-primary-50"
                         : "text-gray-700 hover:bg-gray-100"
                     }`}

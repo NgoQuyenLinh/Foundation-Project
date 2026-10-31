@@ -22,7 +22,13 @@ def test_register_and_login(client, monkeypatch):
             def scalar_one_or_none(self_inner):
                 from types import SimpleNamespace
 
-                return SimpleNamespace(id=1, password_hash=hash_password("password123"))
+                return SimpleNamespace(
+                    id=1,
+                    username="student01",
+                    email="student01@example.com",
+                    role="student",
+                    password_hash=hash_password("password123"),
+                )
 
         return Result()
 

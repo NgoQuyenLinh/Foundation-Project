@@ -1,3 +1,4 @@
+// frontend/digital-library/src/components/shared/trash/TrashEmptyState.tsx
 import { Trash2 } from "lucide-react";
 
 interface TrashEmptyStateProps {
@@ -22,4 +23,4 @@ export function TrashEmptyState({
       </p>
     </div>
   );
-}
+} 

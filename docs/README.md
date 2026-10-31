@@ -9,7 +9,9 @@ Tài liệu điều hướng nhanh đến các tài liệu kỹ thuật, quản 
 docs/
 ├── feat/                           # Tài liệu kỹ thuật chi tiết của từng tính năng
 │   ├── bundle/                     # Đặc tả kỹ thuật mô-đun Bundle
-│   └── community-library/          # Đặc tả kỹ thuật thư viện cộng đồng
+│   ├── community-library/          # Đặc tả kỹ thuật thư viện cộng đồng
+│   ├── document-preview-and-thumbnails/ # Xem trước đa định dạng & Quản lý ảnh bìa
+│   └── markdown-view/              # Chế độ xem & xuất văn bản Markdown
 ├── project-management/             # Quản lý tiến độ, kế hoạch & định hướng dự án
 │   ├── Task Assignment/            # Phân rã và phân công công việc
 │   ├── backlog.md                  # Ý tưởng mới & tính năng cần cải thiện
@@ -28,12 +30,23 @@ docs/
 ## 🗂 Cây Thư Mục & Liên Kết Nhanh
 
 ### 1. 🚀 Đặc Tả Tính Năng (`feat/`)
+- **Document Preview & Thumbnails:**
+  - [`README.md`](./feat/document-preview-and-thumbnails/README.md) — Tổng quan tính năng xem trước đa định dạng & quản lý ảnh bìa
+  - [`API.md`](./feat/document-preview-and-thumbnails/API.md) — Đặc tả API cập nhật trang bìa, raw text và upload
+  - [`DATABASE.md`](./feat/document-preview-and-thumbnails/DATABASE.md) — Thiết kế Database, kiểu TEXT và Trigger FTS
+  - [`BUSINESS_RULES.md`](./feat/document-preview-and-thumbnails/BUSINESS_RULES.md) — Quy tắc nghiệp vụ, MIME validation & phân quyền
+  - [`IMPLEMENTATION.md`](./feat/document-preview-and-thumbnails/IMPLEMENTATION.md) — Hướng dẫn triển khai & các kịch bản kiểm thử
 - **Bundle:**
   - [`API.md`](./feat/bundle/API.md) — Đặc tả API
   - [`BUSINESS_RULES.md`](./feat/bundle/BUSINESS_RULES.md) — Quy tắc nghiệp vụ
   - [`DATABASE.md`](./feat/bundle/DATABASE.md) — Lược đồ cơ sở dữ liệu
   - [`FRONTEND.md`](./feat/bundle/FRONTEND.md) — Yêu cầu & luồng xử lý giao diện
   - [`README.md`](./feat/bundle/README.md) — Tổng quan mô-đun Bundle
+- **Markdown View & Export:**
+  - [`README.md`](./feat/markdown-view/README.md) — Tổng quan tính năng Markdown View
+  - [`IMPLEMENTATION.md`](./feat/markdown-view/IMPLEMENTATION.md) — Chi tiết triển khai
+  - [`BUSINESS_RULES.md`](./feat/markdown-view/BUSINESS_RULES.md) — Quy tắc nghiệp vụ
+  - [`DATABASE.md`](./feat/markdown-view/DATABASE.md) — Lược đồ cơ sở dữ liệu
 - **Community Library:**
   - [`spec.md`](./feat/community-library/spec.md) — Đặc tả yêu cầu
   - [`implementation.md`](./feat/community-library/implementation.md) — Hướng dẫn triển khai

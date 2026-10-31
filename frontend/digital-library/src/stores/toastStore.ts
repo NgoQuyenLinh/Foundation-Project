@@ -2,7 +2,7 @@ import { create } from 'zustand'
 interface Toast {
   id: string
   message: string
-  variant?: 'success' | 'error' | 'info'
+  variant?: 'success' | 'error' | 'info' | 'warning'
 }
 interface ToastStore {
   toasts: Toast[]

@@ -23,11 +23,12 @@ import {
 
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { activityService } from "@/services/activityService";
 import { DocumentCard } from "@/components/shared/documents/DocumentCard";
 import {
   DocumentListView,
   type DocumentListItem,
-} from "@/components/shared/documents/DocumentListView";
+} from "@/components/shared/documents";
 import { ViewToggle, type ViewMode } from "@/components/shared/feedback/ViewToggle";
 import EmptyState from "@/components/shared/feedback/EmptyState";
 import { RenameDocumentModal } from "@/components/shared/modals/RenameDocumentModal";
@@ -257,10 +258,31 @@ export default function BundleDetailPage() {
         break;
       case "download":
         if (child.file_path) {
-          const downloadUrl = `${import.meta.env.VITE_API_URL}/${child.file_path}`;
-          window.open(downloadUrl, "_blank");
+          activityService.downloadDocumentFile(child.id, child.title || "document").catch((err) => {
+            console.error("Lỗi tải file bundle qua API, fallback:", err);
+            const downloadUrl = `${import.meta.env.VITE_API_URL}/${child.file_path}`;
+            window.open(downloadUrl, "_blank");
+          });
         }
         break;
+      case "download-markdown": {
+        const mdPath = child?.markdown_path;
+        if (!mdPath) {
+          console.warn("Tài liệu không có markdown_path, bỏ qua");
+          break;
+        }
+        const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+        const url = `${apiBase}/${mdPath}`;
+        const link = window.document.createElement("a");
+        link.href = url;
+        link.download = `${child?.title || "document"}.md`;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        window.document.body.appendChild(link);
+        link.click();
+        window.document.body.removeChild(link);
+        break;
+      }
       case "rename":
         setRenamingChild(child);
         break;
@@ -330,6 +352,7 @@ export default function BundleDetailPage() {
     updatedAt: child.updated_at || child.created_at,
     size: formatSize(child.file_size || 0),
     thumbnail_path: child.thumbnail_path,
+    markdown_path: child.markdown_path,
     tags: child.tags,
     is_bundle: false,
   }));
@@ -341,6 +364,7 @@ export default function BundleDetailPage() {
     updatedAt: child.updated_at || child.created_at,
     size: child.file_size,
     thumbnail_path: child.thumbnail_path,
+    markdown_path: child.markdown_path,
     owner: child.owner
       ? { full_name: child.owner.full_name || child.owner.username }
       : undefined,

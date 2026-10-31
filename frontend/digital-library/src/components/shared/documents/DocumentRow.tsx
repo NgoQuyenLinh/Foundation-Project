@@ -8,6 +8,8 @@ export interface DocumentType {
   updatedAt: string;
   size: string;
   owner?: string;
+  markdownPath?: string | null;
+  markdown_path?: string | null;
 }
 
 export interface DocumentRowProps {
@@ -43,7 +45,10 @@ export function DocumentRow({ document, onAction }: DocumentRowProps) {
 
       {/* Context menu */}
       <div className="shrink-0">
-        <DocumentContextMenu onAction={(action) => onAction(action, document.id)} />
+        <DocumentContextMenu
+          markdownPath={document.markdownPath || document.markdown_path}
+          onAction={(action) => onAction(action, document.id)}
+        />
       </div>
     </div>
   );

@@ -103,7 +103,8 @@ from app.models.folder_tag import FolderTag
 
 async def get_documents_by_folder(
     db: AsyncSession, owner_id: int, folder_id: int,
-    page: int = 1, page_size: int = 20
+    page: int = 1, page_size: int = 20,
+    workspace_id: Optional[int] = None,
 ) -> dict:
     """Lấy document thuộc folder: is_deleted=false + có tag thuộc folder"""
     offset = (page - 1) * page_size
@@ -118,8 +119,13 @@ async def get_documents_by_folder(
             Document.is_deleted == False,
             Document.bundle_parent_id.is_(None)
         )
-        .distinct()
     )
+    if workspace_id is not None:
+        query = query.where(Document.workspace_id == workspace_id)
+    else:
+        query = query.where(Document.workspace_id.is_(None))
+
+    query = query.distinct()
     
     count_sql = select(func.count(Document.id.distinct())).select_from(query.subquery())
     total = (await db.execute(count_sql)).scalar() or 0

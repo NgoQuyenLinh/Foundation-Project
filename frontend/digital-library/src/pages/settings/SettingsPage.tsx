@@ -12,6 +12,7 @@ import { userService } from "@/services/userService";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/utils/cn";
+import { useSettingsStore } from "@/stores/settingsStore";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -483,6 +484,7 @@ return (
 // ── Tab: Tuỳ chọn ─────────────────────────────────────────────────────────────
 
 function PreferencesTab() {
+  const { defaultPreviewMode, setDefaultPreviewMode } = useSettingsStore();
   const [language, setLanguage] = useState("vi");
   const [theme, setTheme] = useState("light");
   const [notifyEmail, setNotifyEmail] = useState(true);
@@ -518,6 +520,25 @@ function PreferencesTab() {
             <option value="dark">Tối (Dark Mode)</option>
             <option value="system">Theo hệ thống</option>
           </select>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            Chế độ xem tài liệu mặc định
+          </label>
+          <select
+            value={defaultPreviewMode}
+            onChange={(e) =>
+              setDefaultPreviewMode(e.target.value as "original" | "markdown")
+            }
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
+          >
+            <option value="original">Bản gốc (PDF, Ảnh, Word)</option>
+            <option value="markdown">Văn bản Markdown (Nếu có)</option>
+          </select>
+          <p className="mt-1 text-xs text-gray-400">
+            Chỉ áp dụng khi tài liệu có file Markdown đi kèm.
+          </p>
         </div>
 
         <div>
@@ -569,6 +590,7 @@ function PreferencesTab() {
     </div>
   );
 }
+
 
 // ── Main SettingsPage ─────────────────────────────────────────────────────────
 

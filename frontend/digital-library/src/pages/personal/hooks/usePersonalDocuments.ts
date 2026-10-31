@@ -3,6 +3,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { documentService } from "@/services/documentService";
+import { activityService } from "@/services/activityService";
 import type { DocumentAction } from "@/components/shared/documents/DocumentContextMenu";
 import { getFileExtension } from "@/utils/file";
 import { formatSize } from "@/utils/formatSize";
@@ -55,6 +56,7 @@ export function usePersonalDocuments(
 
   const [selectedUploadTime, setSelectedUploadTime] = useState<string | null>(null);
   const [selectedAccessTime, setSelectedAccessTime] = useState<string | null>(null);
+  const [selectedSort, setSelectedSort] = useState<string>("trending");
 
   // --- 2. STATES GIAO DIỆN & MODAL ---
   const [page, setPage] = useState(1);
@@ -71,8 +73,8 @@ export function usePersonalDocuments(
   });
 
   const { data: docData, isLoading: docsLoading, isFetching } = useQuery({
-    queryKey: ["documents"],
-    queryFn: () => documentService.getAll({ page: 1, page_size: 100 }),
+    queryKey: ["documents", selectedSort],
+    queryFn: () => documentService.getAll({ page: 1, page_size: 100, sort: selectedSort }),
   });
 
   // --- 4. MUTATIONS ---
@@ -102,18 +104,39 @@ export function usePersonalDocuments(
       navigate(`/ca-nhan/tai-lieu/${documentId}`);
     } else if (action === "download") {
       const targetDoc = docData?.items.find((d) => d.id.toString() === documentId);
-      if (targetDoc?.file_path) {
-        const fileDownloadUrl = `${import.meta.env.VITE_API_URL}/${targetDoc.file_path}`;
+      if (targetDoc) {
+        activityService.downloadDocumentFile(targetDoc.id, targetDoc.title || "document").catch((err) => {
+          console.error("Lỗi khi tải file qua API, fallback:", err);
+          if (targetDoc.file_path) {
+            const fileDownloadUrl = `${import.meta.env.VITE_API_URL}/${targetDoc.file_path}`;
+            const link = document.createElement("a");
+            link.href = fileDownloadUrl;
+            link.download = targetDoc.title;
+            link.target = "_blank";
+            link.rel = "noreferrer";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }
+        });
+      } else {
+        alert("Không tìm thấy thông tin tài liệu để tải xuống.");
+      }
+    } else if (action === "download-markdown") {
+      const targetDoc = docData?.items.find((d) => d.id.toString() === documentId);
+      const mdPath = targetDoc?.markdown_path;
+      if (mdPath) {
+        const fileDownloadUrl = `${import.meta.env.VITE_API_URL}/${mdPath}`;
         const link = document.createElement("a");
         link.href = fileDownloadUrl;
-        link.download = targetDoc.title;
+        link.download = `${targetDoc.title || "document"}.md`;
         link.target = "_blank";
         link.rel = "noreferrer";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
       } else {
-        alert("Không tìm thấy đường dẫn tệp để tải xuống.");
+        alert("Tài liệu không có tệp Markdown để tải xuống.");
       }
     } else if (action === "rename") {
       const docToRename = docData?.items.find((d) => d.id.toString() === documentId);
@@ -144,7 +167,10 @@ export function usePersonalDocuments(
       size: formatSize(doc.file_size || 0),
       extension: getFileExtension(doc.file_path, doc.file_type, doc.title),
       thumbnail_path: doc.thumbnail_path ?? null,
+      markdown_path: doc.markdown_path ?? null,
+      markdownPath: doc.markdown_path ?? null,
       file_path: doc.file_path ?? null,
+      content: doc.content,
       owner: { name: "You", avatar: "" },
       rawType: doc.file_type,
       tags: doc.tags || [],
@@ -152,6 +178,11 @@ export function usePersonalDocuments(
       is_bundle: doc.is_bundle,
       bundle_parent_id: doc.bundle_parent_id,
       bundle_children_count: doc.bundle_children_count,
+
+      // STATS
+      view_count: doc.view_count ?? 0,
+      personal_view_count: doc.personal_view_count ?? 0,
+      trending_score: doc.trending_score ?? 0,
 
       // LƯU CÁC MỐC THỜI GIAN ĐỂ PHỤC VỤ BỘ LỌC
       created_at: doc.created_at,
@@ -286,6 +317,8 @@ export function usePersonalDocuments(
     setSelectedUploadTime,
     selectedAccessTime,
     setSelectedAccessTime,
+    selectedSort,
+    setSelectedSort,
 
     // Data (Đã lọc)
     fileTypes, docData, docsLoading, isFetching,

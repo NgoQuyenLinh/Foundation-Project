@@ -13,6 +13,7 @@ const DEFAULT_TABS: TabItem<TabKey>[] = [
   { key: "document", label: "Tài liệu" },
   { key: "image", label: "Hình ảnh" },
   { key: "pdf", label: "PDF" },
+  { key: "code", label: "Code mẫu" },
   { key: "other", label: "Khác" },
 ];
 

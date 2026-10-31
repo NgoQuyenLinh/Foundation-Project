@@ -23,6 +23,7 @@ from .folder_tag import FolderTag
 from .subject import Subject
 from .community_submission import CommunitySubmission
 from .document_rating import DocumentRating
+from .document_stats import DocumentStats
 
 
 __all__ = [
@@ -51,4 +52,5 @@ __all__ = [
     "Subject",
     "CommunitySubmission",
     "DocumentRating",
+    "DocumentStats",
 ]

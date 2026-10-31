@@ -154,7 +154,7 @@ export const groupService = {
   getDocumentById: (groupId: number, docId: number) =>
     api.get<Document>(`/groups/${groupId}/documents/${docId}`).then((r) => r.data),
 
-  updateDocument: (groupId: number, docId: number, payload: { title: string }) =>
+  updateDocument: (groupId: number, docId: number, payload: Partial<Document>) =>
     api.patch<Document>(`/groups/${groupId}/documents/${docId}`, payload).then((r) => r.data),
 
   updateTags: (groupId: number, docId: number, tagIds: number[]) =>
@@ -162,6 +162,14 @@ export const groupService = {
 
   removeTag: (groupId: number, docId: number, tagId: number) =>
     api.delete<Document>(`/groups/${groupId}/documents/${docId}/tags/${tagId}`).then((r) => r.data),
+
+  updateThumbnailPage: (groupId: number, docId: number, pageNumber: number) => {
+    const formData = new FormData();
+    formData.append("page_number", pageNumber.toString());
+    return api.post<Document>(`/groups/${groupId}/documents/${docId}/thumbnail`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }).then((r) => r.data);
+  },
 
   async getWorkspaceTags(groupId: number | string): Promise<any[]> {
     const response = await api.get(`/groups/${groupId}/tags/`);

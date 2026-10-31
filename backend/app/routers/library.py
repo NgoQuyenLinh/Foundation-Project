@@ -6,18 +6,22 @@ from datetime import datetime
 from typing import Optional, List
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from fastapi.responses import FileResponse
+from urllib.parse import quote
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import select, func, or_, and_, desc, asc, insert, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.config import s3_client, settings
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, get_optional_user, verify_faculty_access
 from app.models.user import User
 from app.models.faculty import Faculty
 from app.models.subject import Subject
 from app.models.document import Document
+from app.models.document_stats import DocumentStats
 from app.models.document_rating import DocumentRating
 from app.models.community_submission import CommunitySubmission
 from app.models.download_log import DownloadLog
@@ -25,6 +29,8 @@ from app.models.document_tag import document_tags
 from app.models.tag import Tag
 from app.models.notification import Notification
 from app.utils.checksum import compute_file_checksum
+from app.services.document_service import log_activity as _log_activity
+from app.constants.activity_actions import ActivityAction
 from app.schemas.library import (
     FacultyCreate,
     FacultyLibraryOut,
@@ -240,11 +246,17 @@ async def get_documents_by_subject(
         .join(User, User.id == Document.owner_id)
         .outerjoin(rating_sq, rating_sq.c.document_id == Document.id)
         .outerjoin(download_sq, download_sq.c.document_id == Document.id)
+        .outerjoin(DocumentStats, DocumentStats.document_id == Document.id)
         .where(and_(*base_filter))
     )
 
-    if sort == "popular":
-        query = query.order_by(desc("download_count"), desc(Document.created_at))
+    if sort in ("popular", "trending"):
+        query = query.order_by(
+            desc(func.coalesce(DocumentStats.trending_score, 0.0)),
+            desc(func.coalesce(DocumentStats.view_count, 0)),
+            desc("download_count"),
+            desc(Document.created_at),
+        )
     elif sort == "rating":
         query = query.order_by(desc("rating_avg"), desc("rating_count"), desc(Document.created_at))
     else:
@@ -294,7 +306,9 @@ async def get_documents_by_subject(
 @router.get("/documents/{document_id}", response_model=CommunityDocumentOut)
 async def get_community_document(
     document_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Lấy chi tiết một tài liệu công khai."""
     rating_sq = (
@@ -345,6 +359,12 @@ async def get_community_document(
 
     doc, subj_name, fac_id, fac_name, full_name, username, r_avg, r_count, d_count = row
     meta = doc.metadata_ or {}
+    if current_user:
+        background_tasks.add_task(
+            _log_activity, db, document_id, current_user.id,
+            ActivityAction.VIEWED, "library", None, None, 30,
+        )
+
     return CommunityDocumentOut(
         id=doc.id,
         title=doc.title,
@@ -370,6 +390,7 @@ async def get_community_document(
 async def download_community_document(
     document_id: int,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
@@ -380,26 +401,60 @@ async def download_community_document(
 
     # Ghi log nếu người dùng đã đăng nhập
     if current_user:
-        ip_addr = request.client.host if request.client else None
-        user_agent = request.headers.get("user-agent")
-        log_entry = DownloadLog(
-            user_id=current_user.id,
-            document_id=doc.id,
-            ip_address=ip_addr,
-            user_agent=user_agent,
+        background_tasks.add_task(
+            _log_activity, db, document_id, current_user.id,
+            ActivityAction.DOWNLOADED, "library", None, None, 0,
         )
-        db.add(log_entry)
-        await db.commit()
 
-    if not os.path.exists(doc.file_path):
-        raise HTTPException(status_code=404, detail="File vật lý không tồn tại trên hệ thống")
+    file_path = doc.file_path
+    if not file_path:
+        raise HTTPException(status_code=404, detail="Tài liệu không có tệp tin đính kèm")
 
     filename = f"{doc.title}.{doc.file_type}" if doc.file_type and not doc.title.endswith(f".{doc.file_type}") else doc.title
-    return FileResponse(
-        path=doc.file_path,
-        filename=filename,
-        media_type="application/octet-stream",
-    )
+    encoded_filename = quote(filename)
+
+    # 1. Thử đọc từ local disk
+    if os.path.exists(file_path):
+        return FileResponse(
+            path=file_path,
+            filename=filename,
+            media_type="application/octet-stream",
+            content_disposition_type="attachment",
+        )
+
+    # 2. Thử lấy từ Cloudflare R2 / S3 nếu có cấu hình
+    if s3_client and settings.BUCKET_NAME:
+        key = file_path
+        if key.startswith("http://") or key.startswith("https://"):
+            if "/storage/" in key:
+                key = "storage/" + key.split("/storage/", 1)[1]
+            else:
+                key = key.split("/", 3)[-1]
+
+        try:
+            s3_obj = s3_client.get_object(Bucket=settings.BUCKET_NAME, Key=key)
+            content_type = doc.file_type or s3_obj.get("ContentType") or "application/octet-stream"
+
+            def iterfile():
+                for chunk in s3_obj["Body"].iter_chunks(chunk_size=64 * 1024):
+                    yield chunk
+
+            headers = {
+                "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+                "Access-Control-Allow-Origin": "*",
+            }
+            if s3_obj.get("ContentLength"):
+                headers["Content-Length"] = str(s3_obj["ContentLength"])
+
+            return StreamingResponse(
+                iterfile(),
+                media_type=content_type,
+                headers=headers,
+            )
+        except Exception:
+            pass
+
+    raise HTTPException(status_code=404, detail="File vật lý không tồn tại trên hệ thống lưu trữ")
 
 
 @router.get("/search/", response_model=PaginatedCommunityDocuments)
@@ -486,11 +541,17 @@ async def search_community_documents(
         .join(User, User.id == Document.owner_id)
         .outerjoin(rating_sq, rating_sq.c.document_id == Document.id)
         .outerjoin(download_sq, download_sq.c.document_id == Document.id)
+        .outerjoin(DocumentStats, DocumentStats.document_id == Document.id)
         .where(and_(*filters))
     )
 
-    if sort == "popular":
-        query = query.order_by(desc("download_count"), desc(Document.created_at))
+    if sort in ("popular", "trending"):
+        query = query.order_by(
+            desc(func.coalesce(DocumentStats.trending_score, 0.0)),
+            desc(func.coalesce(DocumentStats.view_count, 0)),
+            desc("download_count"),
+            desc(Document.created_at),
+        )
     elif sort == "rating":
         query = query.order_by(desc("rating_avg"), desc("rating_count"), desc(Document.created_at))
     else:
@@ -577,6 +638,7 @@ async def get_document_ratings(
 @router.post("/documents/{document_id}/save-to-personal")
 async def save_community_document_to_personal(
     document_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -584,9 +646,6 @@ async def save_community_document_to_personal(
     src_doc = await db.get(Document, document_id)
     if not src_doc or not src_doc.is_public or src_doc.is_deleted:
         raise HTTPException(status_code=404, detail="Không tìm thấy tài liệu")
-
-    dst_dir = f"storage/personal/{current_user.id}/from_community"
-    new_path = await copy_file_local(src_doc.file_path, dst_dir, os.path.basename(src_doc.file_path))
 
     new_doc = Document(
         owner_id=current_user.id,
@@ -596,11 +655,12 @@ async def save_community_document_to_personal(
         title=src_doc.title,
         description=src_doc.description,
         category_id=src_doc.category_id,
-        file_path=new_path,
+        file_path=src_doc.file_path,
         thumbnail_path=src_doc.thumbnail_path,
+        markdown_path=src_doc.markdown_path,
         file_type=src_doc.file_type,
         file_size=src_doc.file_size,
-        checksum=compute_file_checksum(new_path),
+        checksum=src_doc.checksum,
         content=src_doc.content,
         metadata_=src_doc.metadata_,
     )
@@ -628,6 +688,10 @@ async def save_community_document_to_personal(
 
     await db.commit()
     await db.refresh(new_doc)
+    background_tasks.add_task(
+        _log_activity, db, document_id, current_user.id,
+        ActivityAction.SAVED, "library", None, None, 0,
+    )
     return {
         "id": new_doc.id,
         "title": new_doc.title,
@@ -742,6 +806,7 @@ async def delete_rating(
 @router.post("/submissions/", response_model=SubmissionOut)
 async def submit_document_to_library(
     payload: SubmissionCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -791,6 +856,10 @@ async def submit_document_to_library(
 
     await db.commit()
     await db.refresh(submission)
+    background_tasks.add_task(
+        _log_activity, db, payload.source_document_id, current_user.id,
+        ActivityAction.CONTRIBUTED, "library", None, None, 0,
+    )
 
     return SubmissionOut(
         id=submission.id,
@@ -1036,15 +1105,7 @@ async def approve_submission(
     if current_user.role == "faculty_admin" and current_user.faculty_id != subject.faculty_id:
         raise HTTPException(status_code=403, detail="Bạn chỉ có thể duyệt tài liệu thuộc khoa của mình")
 
-    # 1. Copy file vật lý vào storage/community/{faculty_code}/{subject_code}/
-    fac_code = faculty.code if faculty else "GENERAL"
-    subj_code = subject.code
-    dst_dir = f"storage/community/{fac_code}/{subj_code}"
-    new_file_path = await copy_file_local(
-        source_doc.file_path, dst_dir, os.path.basename(source_doc.file_path)
-    )
-
-    # 2. Tạo document công khai mới
+    # 2. Tạo document công khai mới trỏ vào cùng file vật lý
     metadata = dict(source_doc.metadata_ or {})
     if submission.doc_type:
         metadata["doc_type"] = submission.doc_type
@@ -1059,11 +1120,12 @@ async def approve_submission(
         source_document_id=source_doc.id,
         title=source_doc.title,
         description=source_doc.description,
-        file_path=new_file_path,
+        file_path=source_doc.file_path,
         thumbnail_path=source_doc.thumbnail_path,
+        markdown_path=source_doc.markdown_path,
         file_type=source_doc.file_type,
         file_size=source_doc.file_size,
-        checksum=compute_file_checksum(new_file_path),
+        checksum=source_doc.checksum,
         content=source_doc.content,
         metadata_=metadata,
     )

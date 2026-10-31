@@ -1,6 +1,7 @@
 // frontend/digital-library/src/pages/personal/components/PersonalUploadModal.tsx
 
 import { UploadModal } from "@/components/shared/modals/UploadModal"
+import { documentService } from "@/services/documentService"
 
 interface PersonalUploadModalProps {
   onClose: () => void
@@ -21,7 +22,15 @@ export function PersonalUploadModal({
         formData.append("tag_ids", id.toString())
       })
     }
-    await uploadMutation.mutateAsync(formData)
+    const res = await uploadMutation.mutateAsync(formData)
+    const thumbnailPath = formData.get("thumbnail_path") as string | null
+    if (res?.id && thumbnailPath && !res.thumbnail_path) {
+      try {
+        await documentService.update(res.id, { thumbnail_path: thumbnailPath })
+      } catch (err) {
+        console.warn("Lỗi cập nhật ảnh bìa DOCX:", err)
+      }
+    }
     onClose()
   }
 

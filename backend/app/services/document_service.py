@@ -1,17 +1,21 @@
-# backend/app/services/document_service.py
-
 from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import AsyncSessionLocal
 from app.models.document import Document
+from app.models.document_stats import DocumentStats
 from app.models.document_version import DocumentVersion
 from app.models.download_log import DownloadLog
-from app.models.tag import Tag  # <-- Thêm dòng này
+from app.models.tag import Tag
+from app.constants.activity_actions import ActivityAction
 from app.services.file_service import checksum_for_file, save_upload_file
 
-
+UTC = timezone.utc
 
 
 async def create_document_from_upload(
@@ -20,30 +24,82 @@ async def create_document_from_upload(
     upload, 
     owner_id: int, 
     title: str, 
-    description: str | None, 
-    category_id: int | None, 
+    description: str | None = None, 
+    category_id: int | None = None, 
     workspace_id: int | None = None,
-    tag_ids: list[int] | None = None,  # <-- Thêm tham số tag_ids
-    content: str | None = None
+    tag_ids: list[int] | None = None,
+    content: str | None = None,
+    thumbnail_path: str | None = None,
 ):
-    file_path = save_upload_file(upload, owner_id)
-    checksum = checksum_for_file(file_path)
+    # 1. Đọc nội dung file bất đồng bộ từ UploadFile
+    file_bytes = await upload.read()
+    await upload.seek(0)  # Reset con trỏ file sau khi đọc
     
-    # Kiểm tra file trùng lặp (Bỏ qua các file đã xóa mềm)
-    query = select(Document).where(
-        Document.checksum == checksum, 
-        Document.is_deleted == False
+    file_size = len(file_bytes)
+    checksum = checksum_for_file(file_bytes)
+    
+    # 2. Kiểm tra file trùng lặp (kể cả file trong thùng rác)
+    query_active = select(Document).where(
+        Document.checksum == checksum,
+        Document.is_deleted == False,
+    )
+    query_trash = select(Document).where(
+        Document.checksum == checksum,
+        Document.is_deleted == True,
     )
     if workspace_id:
-        query = query.where(Document.workspace_id == workspace_id)
+        query_active = query_active.where(
+            Document.workspace_id == workspace_id
+        )
+        query_trash = query_trash.where(
+            Document.workspace_id == workspace_id
+        )
     else:
-        query = query.where(Document.owner_id == owner_id, Document.workspace_id.is_(None))
-        
-    result = await db.execute(query)
-    existing = result.scalar_one_or_none()
-    
-    if existing:
-        raise ValueError(f"duplicate_document:{existing.id}")
+        query_active = query_active.where(
+            Document.owner_id == owner_id,
+            Document.workspace_id.is_(None)
+        )
+        query_trash = query_trash.where(
+            Document.owner_id == owner_id,
+            Document.workspace_id.is_(None)
+        )
+
+    # Tìm bản active trùng
+    existing_active = (
+        await db.execute(query_active)
+    ).scalar_one_or_none()
+    if existing_active:
+        raise ValueError(
+            f"duplicate_document:{existing_active.id}"
+        )
+
+    # Tìm bản trong thùng rác trùng — trả lỗi đặc biệt để FE xử lý
+    existing_trash = (
+        await db.execute(query_trash)
+    ).scalar_one_or_none()
+    if existing_trash:
+        raise ValueError(
+            f"in_trash:{existing_trash.id}:{existing_trash.title}"
+        )
+
+    # 3. Single-Instance Storage: Tái sử dụng file vật lý nếu checksum đã tồn tại trên hệ thống
+    query_existing_storage = select(Document).where(
+        Document.checksum == checksum,
+        Document.file_path != "__bundle__",
+        Document.file_path.is_not(None)
+    )
+    existing_storage_doc = (await db.execute(query_existing_storage)).scalars().first()
+
+    if existing_storage_doc:
+        file_path = existing_storage_doc.file_path
+        if not thumbnail_path:
+            thumbnail_path = existing_storage_doc.thumbnail_path
+        markdown_path = existing_storage_doc.markdown_path
+        if not content:
+            content = existing_storage_doc.content
+    else:
+        file_path = await save_upload_file(upload, owner_id)
+        markdown_path = None
         
     document = Document(
         owner_id=owner_id,
@@ -52,8 +108,10 @@ async def create_document_from_upload(
         title=title,
         description=description,
         file_path=file_path,
+        thumbnail_path=thumbnail_path,
+        markdown_path=markdown_path,
         file_type=upload.content_type,
-        file_size=getattr(upload, "size", None),
+        file_size=file_size,
         checksum=checksum,
         content=content,
     )
@@ -68,6 +126,7 @@ async def create_document_from_upload(
     db.add(document)
     await db.flush()
     return document
+
 
 async def add_document_version(db: AsyncSession, *, document: Document, file_path: str, uploaded_by: int | None, note: str | None, checksum: str | None = None):
     result = await db.execute(
@@ -88,10 +147,116 @@ async def add_document_version(db: AsyncSession, *, document: Document, file_pat
 
 
 async def log_download(db: AsyncSession, *, document_id: int, user_id: int, action: str):
+    """Kept for backward compat — use log_activity instead."""
     log = DownloadLog(document_id=document_id, user_id=user_id, action=action)
     db.add(log)
     await db.flush()
     return log
+
+
+async def _do_log_activity(
+    session: AsyncSession,
+    document_id: int,
+    user_id: int,
+    action: str,
+    workspace_context: str,
+    workspace_id: Optional[int],
+    extra_data: Optional[dict],
+    deduplicate_window_minutes: int,
+) -> None:
+    if deduplicate_window_minutes > 0:
+        cutoff = datetime.now(UTC) - timedelta(minutes=deduplicate_window_minutes)
+        existing = await session.execute(
+            select(DownloadLog.id)
+            .where(
+                DownloadLog.document_id == document_id,
+                DownloadLog.user_id == user_id,
+                DownloadLog.action == action,
+                DownloadLog.created_at > cutoff,
+            )
+            .limit(1)
+        )
+        if existing.scalar_one_or_none() is not None:
+            return
+
+    session.add(DownloadLog(
+        document_id=document_id,
+        user_id=user_id,
+        action=action,
+        workspace_context=workspace_context,
+        workspace_id=workspace_id,
+        extra_data=extra_data or {},
+    ))
+
+    # Cập nhật tức thời (near real-time bump) vào bảng document_stats
+    now_utc = datetime.now(UTC)
+    is_view = action in (ActivityAction.VIEWED, "view")
+    is_download = action in (ActivityAction.DOWNLOADED, "download")
+    is_save = action == ActivityAction.SAVED
+    is_share = action in (ActivityAction.SHARED, ActivityAction.CONTRIBUTED)
+
+    stats = await session.get(DocumentStats, document_id)
+    if not stats:
+        stats = DocumentStats(
+            document_id=document_id,
+            view_count=1 if is_view else 0,
+            download_count=1 if is_download else 0,
+            save_count=1 if is_save else 0,
+            share_count=1 if is_share else 0,
+            unique_viewers=1 if is_view else 0,
+            trending_score=1.0 if is_view else (3.0 if is_download else (5.0 if is_save else 2.0)),
+            last_activity_at=now_utc,
+            updated_at=now_utc,
+        )
+        session.add(stats)
+    else:
+        if is_view:
+            stats.view_count += 1
+        elif is_download:
+            stats.download_count += 1
+        elif is_save:
+            stats.save_count += 1
+        elif is_share:
+            stats.share_count += 1
+        stats.last_activity_at = now_utc
+        bump = 1.0 if is_view else (3.0 if is_download else (5.0 if is_save else 2.0))
+        stats.trending_score = (stats.trending_score or 0.0) + bump
+        stats.updated_at = now_utc
+
+    await session.commit()
+
+
+async def log_activity(
+    db: Optional[AsyncSession] = None,
+    document_id: int = 0,
+    user_id: int = 0,
+    action: str = "",
+    workspace_context: str = "personal",
+    workspace_id: Optional[int] = None,
+    extra_data: Optional[dict] = None,
+    deduplicate_window_minutes: int = 0,
+) -> None:
+    """
+    Ghi activity log. Quản lý session riêng an toàn cho BackgroundTasks.
+    Nếu deduplicate_window_minutes > 0, bỏ qua nếu đã có log
+    cùng (document_id, user_id, action) trong khoảng thời gian đó.
+    """
+    try:
+        async with AsyncSessionLocal() as session:
+            await _do_log_activity(
+                session=session,
+                document_id=document_id,
+                user_id=user_id,
+                action=action,
+                workspace_context=workspace_context,
+                workspace_id=workspace_id,
+                extra_data=extra_data,
+                deduplicate_window_minutes=deduplicate_window_minutes,
+            )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Error logging activity for doc {document_id}: {e}")
+
 
 async def get_document_file_types(db: AsyncSession, owner_id: int) -> list[str]:
     result = await db.execute(

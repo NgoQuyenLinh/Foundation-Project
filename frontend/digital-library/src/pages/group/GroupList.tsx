@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/Input";
 import EmptyState from "@/components/shared/feedback/EmptyState";
 import { groupService } from "@/services/groupService";
 import { tagService } from "@/services/tagService";
-import { NotificationsTab } from "./components/NotificationsTab";
+import { NotificationsTab } from "./components/tabs/NotificationsTab";
 import type { GroupListItem, PermissionLevel } from "@/types/group";
 import { cn } from "@/utils/cn";
 import { mockGroups } from "@/mocks/groups";

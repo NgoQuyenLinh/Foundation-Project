@@ -8,6 +8,7 @@ export const createDocumentService = (getBaseUrl: (groupId?: number | string) =>
     folder_id?: number
     page?: number
     page_size?: number
+    sort?: string
   }, groupId?: number | string) =>
     api.get<PaginatedDocuments>(`${getBaseUrl(groupId)}/`, { params })
       .then(r => r.data),
@@ -21,28 +22,23 @@ export const createDocumentService = (getBaseUrl: (groupId?: number | string) =>
     api.get<Document>(`${getBaseUrl(groupId)}/${id}`)
       .then(r => r.data),
 
+  // ✅ Bỏ header thủ công — Axios tự thêm boundary
   upload: (formData: FormData, groupId?: number | string) =>
-    api.post<Document>(`${getBaseUrl(groupId)}/upload`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    }).then(r => r.data),
+    api.post<Document>(`${getBaseUrl(groupId)}/upload`, formData)
+      .then(r => r.data),
 
   uploadBatch: (formData: FormData, groupId?: number | string) =>
-    api.post<Document>(`${getBaseUrl(groupId)}/upload-batch`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    }).then(r => r.data),
+    api.post<Document>(`${getBaseUrl(groupId)}/upload-batch`, formData)
+      .then(r => r.data),
 
   getBundleChildren: (bundleId: number, groupId?: number | string) =>
-    api.get<Document[]>(`${getBaseUrl(groupId)}/${bundleId}/children`).then(r => r.data),
+    api.get<Document[]>(`${getBaseUrl(groupId)}/${bundleId}/children`)
+      .then(r => r.data),
 
   /** Phase 4.1 — Thêm file mới vào bundle */
   addFilesToBundle: (bundleId: number, formData: FormData, groupId?: number | string) =>
-    api.post<Document[]>(`${getBaseUrl(groupId)}/${bundleId}/add-files`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    }).then(r => r.data),
+    api.post<Document[]>(`${getBaseUrl(groupId)}/${bundleId}/add-files`, formData)
+      .then(r => r.data),
 
   /** Phase 4.1b — Gán tài liệu cá nhân sẵn có vào bundle */
   addFromPersonal: (bundleId: number, documentIds: number[]) =>
@@ -58,13 +54,21 @@ export const createDocumentService = (getBaseUrl: (groupId?: number | string) =>
 
   /** Phase 6 — Tách tài liệu khỏi bundle (giữ lại trong kho cá nhân) */
   removeFromBundle: (docId: number) =>
-    api.post<{ success: boolean }>(`/documents/${docId}/remove-from-bundle`).then(r => r.data),
+    api.post<{ success: boolean }>(`/documents/${docId}/remove-from-bundle`)
+      .then(r => r.data),
 
   update: (id: number, payload: Partial<Document>, groupId?: number | string) =>
-    api.patch<Document>(
-      `${getBaseUrl(groupId)}/${id}`,
-      payload
-    ).then(r => r.data),
+    api.patch<Document>(`${getBaseUrl(groupId)}/${id}`, payload)
+      .then(r => r.data),
+
+  // ✅ FIX CHÍNH: không set Content-Type thủ công
+  updateThumbnailPage: (documentId: number, pageNumber: number, groupId?: number | string) => {
+    const formData = new FormData()
+    formData.append('page_number', pageNumber.toString())
+
+    return api.post<Document>(`${getBaseUrl(groupId)}/${documentId}/thumbnail`, formData)
+      .then(r => r.data)
+  },
 
   updateTags: (
     documentId: number,
@@ -73,9 +77,7 @@ export const createDocumentService = (getBaseUrl: (groupId?: number | string) =>
   ) =>
     api.patch<Document>(
       `${getBaseUrl(groupId)}/${documentId}/tags`,
-      {
-        tag_ids: tagIds,
-      }
+      { tag_ids: tagIds }
     ).then(r => r.data),
 
   // XÓA MỘT TAG KHỎI DOCUMENT
@@ -84,12 +86,14 @@ export const createDocumentService = (getBaseUrl: (groupId?: number | string) =>
     tagId: number,
     groupId?: number | string
   ) =>
-    api.delete<Document>(
-      `${getBaseUrl(groupId)}/${documentId}/tags/${tagId}`
-    ).then(r => r.data),
+    api.delete<Document>(`${getBaseUrl(groupId)}/${documentId}/tags/${tagId}`)
+      .then(r => r.data),
 
   delete: (id: number, groupId?: number | string) =>
     api.delete(`${getBaseUrl(groupId)}/${id}`),
+
+  restoreOne: (docId: number) =>
+    api.post(`/trash/${docId}/restore`).then(r => r.data),
 })
 
 export const documentService = createDocumentService(() => '/documents')
@@ -97,9 +101,12 @@ export const documentService = createDocumentService(() => '/documents')
 export const groupDocumentService = {
   ...createDocumentService((groupId) => `/groups/${groupId}/documents`),
   saveToPersonal: (groupId: number | string, documentId: number) =>
-    api.post(`/groups/${groupId}/documents/${documentId}/save-to-personal`).then(r => r.data),
+    api.post(`/groups/${groupId}/documents/${documentId}/save-to-personal`)
+      .then(r => r.data),
   attachTag: (groupId: number | string, documentId: number, tagId: number) =>
-    api.post(`/groups/${groupId}/documents/${documentId}/tags`, { tag_id: tagId }).then(r => r.data),
+    api.post(`/groups/${groupId}/documents/${documentId}/tags`, { tag_id: tagId })
+      .then(r => r.data),
   detachTag: (groupId: number | string, documentId: number, tagId: number) =>
-    api.delete(`/groups/${groupId}/documents/${documentId}/tags/${tagId}`).then(r => r.data),
+    api.delete(`/groups/${groupId}/documents/${documentId}/tags/${tagId}`)
+      .then(r => r.data),
 }

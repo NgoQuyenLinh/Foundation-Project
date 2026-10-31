@@ -7,7 +7,6 @@ import {
   User,
   Users,
   BookOpen,
-  LayoutDashboard,
   FileText,
   Share2,
   Heart,
@@ -27,7 +26,7 @@ interface SidebarItem {
 }
 
 const SCOPE_ITEMS: SidebarItem[] = [
-  { icon: User, label: "Cá nhân", to: "/personal" },
+  { icon: User, label: "Cá nhân", to: "/personal/dashboard" },
   { icon: Users, label: "Nhóm", to: "/groups" },
   // { icon: BookOpen, label: "Lớp", to: "/class" },
   // { icon: GraduationCap, label: "Khoa", to: "/faculty" },
@@ -36,7 +35,7 @@ const SCOPE_ITEMS: SidebarItem[] = [
 ];
 
 const PERSONAL_ITEMS: SidebarItem[] = [
-  { icon: LayoutDashboard, label: "Dashboard", to: "/personal/dashboard" },
+  //{ icon: LayoutDashboard, label: "Dashboard", to: "/personal/dashboard" },
   { icon: FileText, label: "Tài liệu", to: "/personal/documents" },
   { icon: Share2, label: "Đã chia sẻ với tôi", to: "/personal/shared" },
   { icon: Heart, label: "Yêu thích", to: "/personal/favorites" },

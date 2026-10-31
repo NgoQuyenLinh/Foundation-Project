@@ -20,22 +20,22 @@ import { formatRelativeDate } from "@/utils/formatDate";
 import type { GroupTab } from "./types/groupSpace.types";
 import { TAB_LABELS } from "./types/groupSpace.types";
 
-import MembersTab from "./components/MembersTab";
-import RequestsTab from "./components/RequestsTab";
-import SettingsTab from "./components/SettingsTab";
-import TrashTab from "./components/TrashTab";
-import SimpleShareModal from "./components/SimpleShareModal";
-import InviteModal from "./components/InviteModal";
+import MembersTab from "./components/tabs/MembersTab";
+import RequestsTab from "./components/tabs/RequestsTab";
+import SettingsTab from "./components/tabs/SettingsTab";
+import TrashTab from "./components/tabs/TrashTab";
+import DocumentsTab from "./components/tabs/DocumentsTab";
+import SimpleShareModal from "./components/modals/SimpleShareModal";
+import InviteModal from "./components/modals/InviteModal";
 
 import { useGroupSpace } from "./hooks/useGroupSpace";
-import { GroupFolderModalContainer } from "./components/GroupFolderModalContainer";
+import { GroupFolderModalContainer } from "./components/modals/GroupFolderModalContainer";
 import { RenameDocumentModal } from "@/components/shared/modals/RenameDocumentModal";
-import { GroupUploadModal } from "./components/GroupUploadModal";
-import { GroupDocumentsSection } from "./components/GroupDocumentsSection";
+import { GroupUploadModal } from "./components/modals/GroupUploadModal";
 import { CreateFolderModal } from "@/components/shared/modals/CreateFolderModal";
 import { useHighlightElement } from "@/hooks/useHighlightElement";
 
-import GroupSwitcher from "./components/GroupSwitcher";
+import GroupSwitcher from "./components/shared/GroupSwitcher";
 
 export default function GroupSpace() {
   const {
@@ -219,9 +219,23 @@ export default function GroupSpace() {
 
       {/* TAB TÀI LIỆU */}
       {activeTab === "documents" && (
-        <GroupDocumentsSection
+        <DocumentsTab
+          documents={filteredDocuments}
+          folders={folders}
           selectedFolderId={selectedFolderId}
           onSelectFolder={handleSelectFolder}
+          isLoading={docsLoading || foldersLoading}
+          permission={permission}
+          isOwner={isOwner}
+          groupId={groupId}
+          onSave={(docId: number) => saveDocument.mutateAsync(docId)}
+          onDelete={(docId: number) => deleteDocument.mutateAsync(docId)}
+          onRename={handleRenameDocument}
+          onAddFolder={() => {
+            setEditingFolder(null);
+            setIsFolderModalOpen(true);
+          }}
+          onFolderAction={handleFolderAction}
           activeDocumentTab={activeDocumentTab}
           setActiveDocumentTab={setActiveDocumentTab}
           searchQuery={searchQuery}
@@ -232,7 +246,6 @@ export default function GroupSpace() {
           fileTypes={fileTypes}
           selectedFileType={selectedFileType}
           setSelectedFileType={setSelectedFileType}
-          /* BỔ SUNG CÁC PROPS BỘ LỌC MỚI */
           selectedUploadTime={selectedUploadTime}
           setSelectedUploadTime={setSelectedUploadTime}
           selectedAccessTime={selectedAccessTime}
@@ -240,19 +253,6 @@ export default function GroupSpace() {
           members={members}
           selectedUploaderId={selectedUploaderId}
           setSelectedUploaderId={setSelectedUploaderId}
-          filteredDocuments={filteredDocuments}
-          folders={folders}
-          docsLoading={docsLoading}
-          foldersLoading={foldersLoading}
-          permission={permission}
-          isOwner={isOwner}
-          groupId={groupId}
-          saveDocument={saveDocument}
-          deleteDocument={deleteDocument}
-          handleRenameDocument={handleRenameDocument}
-          setEditingFolder={setEditingFolder}
-          setIsFolderModalOpen={setIsFolderModalOpen}
-          handleFolderAction={handleFolderAction}
         />
       )}
 

@@ -1,6 +1,16 @@
 import { useState, useMemo } from 'react';
 
-export type TabKey = "all" | "document" | "image" | "pdf" | "other";
+export type TabKey = "all" | "document" | "image" | "pdf" | "code" | "other";
+
+export const CODE_EXTENSIONS = [
+  "py", "js", "ts", "jsx", "tsx", "cpp", "c", "h", "java", "cs", 
+  "go", "rs", "php", "rb", "swift", "kt", "scala", "r", "m",
+  "sql", "json", "yaml", "yml", "toml", "xml", "csv",
+  "html", "css", "scss", "sass", "less", "svelte", "vue",
+  "sh", "bash", "zsh", "fish", "ps1", "bat", "cmd",
+  "md", "mdx", "rst", "tex",
+  "env", "gitignore", "dockerignore", "makefile", "mk", "dockerfile"
+];
 
 export const getNormalizedExtension = (type?: string | null) => {
   if (!type) return ""
@@ -64,11 +74,13 @@ export function useDocumentFilters<T extends {
         ].includes(ext)
         const isImg = ["png", "jpg", "jpeg", "gif", "svg", "webp"].includes(ext)
         const isPdf = ext === "pdf"
+        const isCode = CODE_EXTENSIONS.includes(ext) || ext.includes("dockerfile");
 
         if (activeTab === "document" && !isDoc) return false
         if (activeTab === "image" && !isImg) return false
         if (activeTab === "pdf" && !isPdf) return false
-        if (activeTab === "other" && (isDoc || isImg || isPdf)) return false
+        if (activeTab === "code" && !isCode) return false
+        if (activeTab === "other" && (isDoc || isImg || isPdf || isCode)) return false
       }
       return true
     })

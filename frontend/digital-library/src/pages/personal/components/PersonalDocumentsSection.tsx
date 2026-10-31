@@ -9,8 +9,9 @@ import { BundleExpandedFrame } from "./BundleExpandedFrame";
 import { type DocumentAction } from "@/components/shared/documents/DocumentContextMenu";
 import {
   DocumentListView,
+  DocumentDetailView,
   type DocumentListItem,
-} from "@/components/shared/documents/DocumentListView";
+} from "@/components/shared/documents";
 import { ViewToggle, type ViewMode } from "@/components/shared/feedback/ViewToggle";
 import EmptyState from "@/components/shared/feedback/EmptyState";
 import { cn } from "@/utils/cn";
@@ -26,6 +27,7 @@ export interface DocCardType {
   size: string;
   extension?: string;
   thumbnail_path?: string | null;
+  markdown_path?: string | null;
   file_path?: string | null;
   owner?: { name: string; avatar: string };
   rawType?: string | null;
@@ -33,6 +35,12 @@ export interface DocCardType {
   is_bundle?: boolean;
   bundle_parent_id?: number | null;
   bundle_children_count?: number | null;
+  // Bổ sung cho Detail view
+  content?: string | null;
+  pages?: number | null;
+  view_count?: number;
+  personal_view_count?: number;
+  trending_score?: number;
 }
 
 interface PersonalDocumentsSectionProps {
@@ -54,7 +62,7 @@ interface PersonalDocumentsSectionProps {
 }
 
 /**
- * Convert size string (vd: "2.5 MB") về bytes để DocumentListView có thể format lại.
+ * Convert size string (vd: "2.5 MB") về bytes để DocumentListView / DocumentDetailView format lại.
  */
 function parseSizeToBytes(size?: string): number | undefined {
   if (!size) return undefined;
@@ -77,7 +85,7 @@ function parseSizeToBytes(size?: string): number | undefined {
 }
 
 /**
- * Map DocCardType -> DocumentListItem để dùng chung DocumentListView.
+ * Map DocCardType -> DocumentListItem để dùng cho DocumentListView và DocumentDetailView.
  */
 function toListItem(doc: DocCardType): DocumentListItem {
   return {
@@ -87,12 +95,18 @@ function toListItem(doc: DocCardType): DocumentListItem {
     updatedAt: doc.updatedAt,
     size: parseSizeToBytes(doc.size),
     thumbnail_path: doc.thumbnail_path,
+    markdown_path: doc.markdown_path ?? null,
     owner: doc.owner ? { full_name: doc.owner.name } : undefined,
     tags: doc.tags,
     workspace_type: "personal",
     is_bundle: doc.is_bundle,
     bundle_parent_id: doc.bundle_parent_id,
     bundle_children_count: doc.bundle_children_count,
+    content: doc.content ?? null,
+    pages: doc.pages ?? null,
+    view_count: doc.view_count,
+    personal_view_count: doc.personal_view_count,
+    trending_score: doc.trending_score,
   };
 }
 
@@ -110,14 +124,14 @@ export function PersonalDocumentsSection({
   searchQuery = "",
   selectedTagId = null,
 }: PersonalDocumentsSectionProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [viewMode, setViewMode] = useState<ViewMode>("detail");
 
   // Local state cho Bundle Expanded Grid
-  const [isExpandedMode, setIsExpandedMode] = useState(false);
+  const [isExpandedMode, setIsExpandedMode] = useState(true);
   const [bundleChildrenMap, setBundleChildrenMap] = useState<Map<string, DocCardType[]>>(new Map());
   const [loadingBundleIds, setLoadingBundleIds] = useState<Set<string>>(new Set());
 
-  // useEffect tự động expand khi filter active (không tự collapse khi filter tắt)
+  // Tự động expand khi filter active (không tự collapse khi filter tắt)
   useEffect(() => {
     if (isFilterActive) {
       setIsExpandedMode(true);
@@ -131,7 +145,7 @@ export function PersonalDocumentsSection({
     setLoadingBundleIds((prev) => new Set(prev).add(bundleId));
     try {
       const children = await documentService.getBundleChildren(Number(bundleId));
-      const mapped: DocCardType[] = children.map((c) => ({
+      const mapped: DocCardType[] = children.map((c: any) => ({
         id: String(c.id),
         name: c.title,
         type: c.file_type || "file",
@@ -139,12 +153,15 @@ export function PersonalDocumentsSection({
         size: formatSize(c.file_size || 0),
         extension: getFileExtension(c.file_path, c.file_type, c.title),
         thumbnail_path: c.thumbnail_path ?? null,
+        markdown_path: c.markdown_path ?? null,
         file_path: c.file_path ?? null,
         rawType: c.file_type,
         tags: c.tags || [],
         is_bundle: false,
         bundle_parent_id: Number(bundleId),
         bundle_children_count: null,
+        content: c.content ?? null,
+        pages: c.pages ?? null,
       }));
       setBundleChildrenMap((prev) => new Map(prev).set(bundleId, mapped));
     } finally {
@@ -156,7 +173,7 @@ export function PersonalDocumentsSection({
     }
   }, [bundleChildrenMap, loadingBundleIds]);
 
-  // useEffect trigger fetch khi expanded
+  // Trigger fetch khi expanded
   useEffect(() => {
     if (!isExpandedMode) return;
     const bundles = filteredDocCards.filter((d) => d.is_bundle);
@@ -206,7 +223,7 @@ export function PersonalDocumentsSection({
       </div>
 
       {/* Grid view */}
-      {viewMode === "grid" ? (
+      {viewMode === "grid" && (
         <div
           className={cn(
             "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4",
@@ -220,7 +237,6 @@ export function PersonalDocumentsSection({
           ) : filteredDocCards.length > 0 ? (
             filteredDocCards.map((doc) => {
               if (!doc.is_bundle) {
-                // Document thường — render như cũ
                 return (
                   <DocumentCard
                     key={doc.id}
@@ -230,9 +246,7 @@ export function PersonalDocumentsSection({
                 );
               }
 
-              // Bundle
               if (!isExpandedMode) {
-                // Chế độ thu gọn — BundleDocumentCard như cũ
                 return (
                   <BundleDocumentCard
                     key={doc.id}
@@ -242,11 +256,9 @@ export function PersonalDocumentsSection({
                 );
               }
 
-              // Chế độ mở rộng — BundleExpandedFrame, chiếm toàn bộ hàng
               const filteredChildren = getFilteredChildren(doc.id);
               const isLoading = loadingBundleIds.has(doc.id);
 
-              // Nếu filter active và không có con nào khớp → ẩn bundle này
               if (isFilterActive && !isLoading && filteredChildren.length === 0) {
                 return null;
               }
@@ -275,8 +287,10 @@ export function PersonalDocumentsSection({
             </div>
           )}
         </div>
-      ) : (
-        /* List view */
+      )}
+
+      {/* List view */}
+      {viewMode === "list" && (
         <div className={cn(isFetching && "opacity-60 pointer-events-none")}>
           <DocumentListView
             documents={listItems}
@@ -286,18 +300,34 @@ export function PersonalDocumentsSection({
             }
             onToggleBundle={async (bundleId) => {
               const children = await documentService.getBundleChildren(Number(bundleId));
-              return children.map((c) => ({
+              return children.map((c: any) => ({
                 id: String(c.id),
                 title: c.title,
                 type: c.file_type || "file",
                 updatedAt: c.updated_at || c.created_at,
                 size: c.file_size,
                 thumbnail_path: c.thumbnail_path,
+                markdown_path: c.markdown_path ?? null,
                 tags: c.tags,
                 workspace_type: "personal",
                 is_bundle: false,
+                content: c.content ?? null,
+                pages: c.pages ?? null,
               }));
             }}
+          />
+        </div>
+      )}
+
+      {/* Detail view */}
+      {viewMode === "detail" && (
+        <div className={cn(isFetching && "opacity-60 pointer-events-none")}>
+          <DocumentDetailView
+            documents={listItems}
+            isLoading={docsLoading}
+            onAction={(action, docId) =>
+              onDocumentAction(action, String(docId))
+            }
           />
         </div>
       )}
@@ -306,7 +336,7 @@ export function PersonalDocumentsSection({
       {docData && docData.total_pages > 1 && (
         <div className="mt-6 flex items-center justify-between border-t border-gray-200 pt-4 text-sm text-gray-600">
           <span>
-            Trang {page} / {docData.total_pages} • Tổng {docData.total} tài liệu
+            Trang {page} / {docData.total_pages} (Tổng {docData.total} tài liệu)
           </span>
           <div className="flex gap-2">
             <Button

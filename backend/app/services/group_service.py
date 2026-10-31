@@ -105,9 +105,6 @@ async def share_document_to_group(
     ):
         raise HTTPException(404, "Không tìm thấy tài liệu")
 
-    dst_dir = f"storage/groups/{workspace_id}"
-    new_path = await copy_file(src_doc.file_path, dst_dir, os.path.basename(src_doc.file_path))
-
     new_doc = Document(
         owner_id=sharer_id,
         workspace_id=workspace_id,
@@ -115,11 +112,12 @@ async def share_document_to_group(
         title=src_doc.title,
         description=src_doc.description,
         category_id=src_doc.category_id,
-        file_path=new_path,
+        file_path=src_doc.file_path,
         thumbnail_path=src_doc.thumbnail_path,
+        markdown_path=src_doc.markdown_path,
         file_type=src_doc.file_type,
         file_size=src_doc.file_size,
-        checksum=compute_file_checksum(new_path),
+        checksum=src_doc.checksum,
         content=src_doc.content,
         metadata_=src_doc.metadata_,
     )
@@ -138,9 +136,6 @@ async def save_to_personal(
     if not src_doc or src_doc.workspace_id != workspace_id or src_doc.is_deleted:
         raise HTTPException(404, "Không tìm thấy tài liệu")
 
-    dst_dir = f"storage/personal/{user_id}/from_group"
-    new_path = await copy_file(src_doc.file_path, dst_dir, os.path.basename(src_doc.file_path))
-
     new_doc = Document(
         owner_id=user_id,
         workspace_id=None,
@@ -148,11 +143,12 @@ async def save_to_personal(
         title=src_doc.title,
         description=src_doc.description,
         category_id=src_doc.category_id,
-        file_path=new_path,
+        file_path=src_doc.file_path,
         thumbnail_path=src_doc.thumbnail_path,
+        markdown_path=src_doc.markdown_path,
         file_type=src_doc.file_type,
         file_size=src_doc.file_size,
-        checksum=compute_file_checksum(new_path),
+        checksum=src_doc.checksum,
         content=src_doc.content,
         metadata_=src_doc.metadata_,
     )

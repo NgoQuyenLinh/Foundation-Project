@@ -1,5 +1,6 @@
 # backend/app/routers/groups.py
 
+import hashlib
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -11,6 +12,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.document import Document
+from app.models.document_stats import DocumentStats
 from app.models.document_tag import document_tags
 from app.models.folder import Folder
 from app.models.folder_tag import FolderTag
@@ -21,7 +23,7 @@ from app.models.workspace import Workspace
 from app.models.workspace_invitation import WorkspaceInvitation
 from app.models.workspace_member import WorkspaceMember
 from app.routers.documents import _process_document_background
-from app.schemas.document import DocumentOut, DocumentUpdate, PaginatedDocuments
+from app.schemas.document import BatchUploadOut, DocumentOut, DocumentUpdate, PaginatedDocuments
 from app.schemas.folder import AddTagsToFolder, FolderCreate, FolderOut, FolderUpdate
 from app.schemas.group import (
     BulkInviteCreate,
@@ -40,8 +42,17 @@ from app.schemas.group import (
     WorkspaceOut,
 )
 from app.schemas.tag import TagCreate, TagOut, TagUpdate
-from app.services.document_service import create_document_from_upload
+from app.services.document_service import create_document_from_upload, log_activity as _log_activity
+from app.constants.activity_actions import ActivityAction
+from app.services.file_service import (
+    checksum_for_file,
+    download_r2_to_temp_file,
+    safe_remove as _safe_remove,
+    save_upload_file,
+    upload_bytes_to_r2,
+)
 from app.services.folder_service import get_folders_with_stats
+from app.services.file_processor import create_thumbnail
 from app.services.group_service import require_write_permission
 from app.services.group_service import (
     mark_group_document_deleted,
@@ -212,6 +223,7 @@ import uuid
 async def list_group_documents(
     group_id: int,
     folder_id: Optional[int] = Query(None),
+    sort: str = Query("trending", pattern="^(trending|newest|views|title)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -220,7 +232,8 @@ async def list_group_documents(
     await require_member(db, group_id, current_user.id)
     offset = (page - 1) * page_size
     query = (
-        select(Document)
+        select(Document, DocumentStats)
+        .outerjoin(DocumentStats, DocumentStats.document_id == Document.id)
         .options(selectinload(Document.tags), selectinload(Document.owner))
         .where(
             Document.workspace_id == group_id,
@@ -241,9 +254,26 @@ async def list_group_documents(
         )
     count_result = await db.execute(select(func.count()).select_from(query.subquery()))
     total = count_result.scalar() or 0
-    result = await db.execute(query.order_by(Document.created_at.desc()).offset(offset).limit(page_size))
-    items = result.scalars().all()
 
+    if sort == "newest":
+        query = query.order_by(Document.created_at.desc())
+    elif sort == "views":
+        query = query.order_by(
+            func.coalesce(DocumentStats.view_count, 0).desc(),
+            Document.created_at.desc(),
+        )
+    elif sort == "title":
+        query = query.order_by(Document.title.asc(), Document.created_at.desc())
+    else:  # "trending"
+        query = query.order_by(
+            func.coalesce(DocumentStats.trending_score, 0.0).desc(),
+            Document.created_at.desc(),
+        )
+
+    result = await db.execute(query.offset(offset).limit(page_size))
+    rows = result.all()
+
+    items = [doc for doc, _ in rows]
     bundle_ids = [d.id for d in items if d.is_bundle]
     counts_map = {}
     if bundle_ids:
@@ -254,11 +284,31 @@ async def list_group_documents(
         )
         counts_map = dict(counts_res.all())
 
+    doc_ids = [d.id for d in items]
+    personal_views_map = {}
+    if doc_ids:
+        from app.models.download_log import DownloadLog
+        p_res = await db.execute(
+            select(DownloadLog.document_id, func.count(DownloadLog.id))
+            .where(
+                DownloadLog.document_id.in_(doc_ids),
+                DownloadLog.user_id == current_user.id,
+                DownloadLog.action.in_([ActivityAction.VIEWED, "view"]),
+            )
+            .group_by(DownloadLog.document_id)
+        )
+        personal_views_map = dict(p_res.all())
+
     items_out = []
-    for doc in items:
+    for doc, stats in rows:
         doc_out = DocumentOut.model_validate(doc)
         if doc.is_bundle:
             doc_out.bundle_children_count = counts_map.get(doc.id, 0)
+        doc_out.trending_score = float(stats.trending_score) if stats else 0.0
+        doc_out.view_count = int(stats.view_count) if stats else 0
+        doc_out.download_count = int(stats.download_count) if stats else 0
+        doc_out.share_count = int(stats.share_count) if stats else 0
+        doc_out.personal_view_count = int(personal_views_map.get(doc.id, 0))
         items_out.append(doc_out)
 
     return {
@@ -273,6 +323,7 @@ async def list_group_documents(
 async def get_group_document(
     group_id: int,
     document_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -310,6 +361,25 @@ async def get_group_document(
         )
         doc_out.bundle_children_count = cnt or 0
 
+    stats = (await db.execute(select(DocumentStats).where(DocumentStats.document_id == document_id))).scalar_one_or_none()
+    doc_out.trending_score = float(stats.trending_score) if stats else 0.0
+    doc_out.view_count = int(stats.view_count) if stats else 0
+    doc_out.download_count = int(stats.download_count) if stats else 0
+    doc_out.share_count = int(stats.share_count) if stats else 0
+    from app.models.download_log import DownloadLog
+    p_cnt = (await db.execute(
+        select(func.count(DownloadLog.id)).where(
+            DownloadLog.document_id == document_id,
+            DownloadLog.user_id == current_user.id,
+            DownloadLog.action.in_([ActivityAction.VIEWED, "view"]),
+        )
+    )).scalar() or 0
+    doc_out.personal_view_count = int(p_cnt)
+
+    background_tasks.add_task(
+        _log_activity, db, document_id, current_user.id,
+        ActivityAction.VIEWED, "group", group_id, None, 30,
+    )
     return doc_out
 
 @router.get("/groups/{group_id}/documents/{bundle_id}/children", response_model=list[DocumentOut])
@@ -336,9 +406,10 @@ async def get_group_bundle_children(
     )
     return result.scalars().all()
 
-@router.post("/groups/{group_id}/documents/upload-batch", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
+@router.post("/groups/{group_id}/documents/upload-batch", response_model=BatchUploadOut, status_code=status.HTTP_201_CREATED)
 async def upload_group_batch_documents(
     group_id: int,
+    background_tasks: BackgroundTasks,
     bundle_title: str = Form(...),
     bundle_description: Optional[str] = Form(None),
     tag_ids: str = Form(""),
@@ -388,33 +459,94 @@ async def upload_group_batch_documents(
         await db.flush()
 
         total_size = 0
-        storage_dir = f"storage/groups/{group_id}"
-        os.makedirs(storage_dir, exist_ok=True)
+        skipped = []
 
         for file in files:
             content = await file.read()
-            total_size += len(content)
-            unique_name = f"{uuid.uuid4().hex}_{file.filename}"
-            file_path = f"{storage_dir}/{unique_name}"
-            with open(file_path, "wb") as f:
-                f.write(content)
-            saved_file_paths.append(file_path)
-
             checksum = hashlib.sha256(content).hexdigest()
+
+            # Kiểm tra trùng trong workspace (active + trash)
+            dup_active = (await db.execute(
+                select(Document).where(
+                    Document.checksum == checksum,
+                    Document.workspace_id == group_id,
+                    Document.is_deleted == False,
+                )
+            )).scalar_one_or_none()
+
+            dup_trash = (await db.execute(
+                select(Document).where(
+                    Document.checksum == checksum,
+                    Document.workspace_id == group_id,
+                    Document.is_deleted == True,
+                )
+            )).scalar_one_or_none()
+
+            if dup_active:
+                skipped.append({
+                    "filename": file.filename,
+                    "reason": "duplicate",
+                    "existing_id": dup_active.id
+                })
+                continue
+
+            if dup_trash:
+                skipped.append({
+                    "filename": file.filename,
+                    "reason": "in_trash",
+                    "existing_id": dup_trash.id
+                })
+                continue
+
+            # Single-Instance Storage: Tái sử dụng file nếu checksum đã có trên hệ thống
+            query_storage = select(Document).where(
+                Document.checksum == checksum,
+                Document.file_path != "__bundle__",
+                Document.file_path.is_not(None)
+            )
+            existing_storage = (await db.execute(query_storage)).scalars().first()
+
+            if existing_storage:
+                file_path = existing_storage.file_path
+                thumbnail_path = existing_storage.thumbnail_path
+                markdown_path = existing_storage.markdown_path
+                text_content = existing_storage.content
+            else:
+                total_size += len(content)
+                await file.seek(0)
+                file_path = await save_upload_file(file, current_user.id)
+                saved_file_paths.append(file_path)
+                thumbnail_path = None
+                markdown_path = None
+                from app.services.file_processor import get_file_group
+                text_content = None
+                if get_file_group(file.content_type or "", file.filename or "") == "text":
+                    text_content = content.decode("utf-8", errors="replace")
+                
             child = Document(
                 owner_id=current_user.id,
                 workspace_id=group_id,
                 category_id=category_id,
                 title=file.filename or "Untitled",
                 file_path=file_path,
+                thumbnail_path=thumbnail_path,
+                markdown_path=markdown_path,
                 file_type=file.content_type or "application/octet-stream",
                 file_size=len(content),
                 checksum=checksum,
+                content=text_content,
                 is_bundle=False,
                 bundle_parent_id=bundle.id,
                 is_deleted=False,
             )
             db.add(child)
+            await db.flush()
+            background_tasks.add_task(
+                _process_document_background,
+                child.id,
+                child.file_path,
+                child.file_type or "",
+            )
 
         bundle.file_size = total_size
 
@@ -439,15 +571,14 @@ async def upload_group_batch_documents(
         )
         bundle_out = DocumentOut.model_validate(fresh_bundle)
         bundle_out.bundle_children_count = count_result.scalar() or 0
-        return bundle_out
+        return {
+            "bundle": bundle_out,
+            "skipped": skipped,
+        }
     except Exception as e:
         await db.rollback()
         for p in saved_file_paths:
-            if os.path.exists(p):
-                try:
-                    os.remove(p)
-                except Exception:
-                    pass
+            _safe_remove(p)
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=f"Lỗi khi tải lên gói tài liệu nhóm: {str(e)}")
@@ -460,24 +591,53 @@ async def upload_group_document(
     description: Optional[str] = Form(None),
     category_id: Optional[int] = Form(None),
     tag_ids: list[int] = Form(default=[]),
+    thumbnail_path: Optional[str] = Form(None),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     await require_full_permission(db, group_id, current_user.id)
-    document = await create_document_from_upload(
-        db,
-        upload=file,
-        owner_id=current_user.id,
-        title=title,
-        description=description,
-        category_id=category_id,
-        workspace_id=group_id,
-        tag_ids=tag_ids,
-    )
+    
+    content = None
+    from app.services.file_processor import get_file_group
+    if get_file_group(file.content_type or "", file.filename or "") == "text":
+        file_bytes = await file.read()
+        content = file_bytes.decode('utf-8', errors='replace')
+        await file.seek(0)
+        
+    try:
+        document = await create_document_from_upload(
+            db,
+            upload=file,
+            owner_id=current_user.id,
+            title=title,
+            description=description,
+            category_id=category_id,
+            workspace_id=group_id,
+            tag_ids=tag_ids,
+            thumbnail_path=thumbnail_path,
+            content=content,
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        if msg.startswith("duplicate_document:"):
+            doc_id = msg.split(":")[1]
+            raise HTTPException(409, {"code": "DUPLICATE", "document_id": int(doc_id)})
+        elif msg.startswith("in_trash:"):
+            parts = msg.split(":")
+            raise HTTPException(409, {
+                "code": "IN_TRASH",
+                "document_id": int(parts[1]),
+                "title": parts[2] if len(parts) > 2 else "tài liệu này"
+            })
+        raise
     await db.commit()
     await db.refresh(document)
     background_tasks.add_task(_process_document_background, document.id, document.file_path, document.file_type or "")
+    background_tasks.add_task(
+        _log_activity, db, document.id, current_user.id,
+        ActivityAction.UPLOADED, "group", group_id, None, 0,
+    )
     return document
 
 
@@ -485,12 +645,17 @@ async def upload_group_document(
 async def share_documents(
     group_id: int,
     payload: ShareDocumentsPayload,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     await require_full_permission(db, group_id, current_user.id)
     for document_id in payload.document_ids:
         await share_document_to_group(db, document_id, group_id, current_user.id)
+        background_tasks.add_task(
+            _log_activity, db, document_id, current_user.id,
+            ActivityAction.SHARED, "group", group_id, None, 0,
+        )
     return ShareResult(shared_count=len(payload.document_ids))
 
 # ==========================================
@@ -534,11 +699,79 @@ async def update_group_document(
         document.description = payload.description
     if hasattr(payload, 'category_id') and payload.category_id is not None:
         document.category_id = payload.category_id
+    if hasattr(payload, 'thumbnail_path') and payload.thumbnail_path is not None:
+        document.thumbnail_path = payload.thumbnail_path
         
     await db.commit()
     await db.refresh(document)
     
     return document
+
+@router.post("/groups/{group_id}/documents/{document_id}/thumbnail", response_model=DocumentOut)
+async def update_group_document_thumbnail(
+    group_id: int,
+    document_id: int,
+    page_number: int = Form(1),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cập nhật ảnh bìa từ một trang PDF (cho tài liệu nhóm)"""
+    await require_full_permission(db, group_id, current_user.id)
+
+    result = await db.execute(
+        select(Document)
+        .options(selectinload(Document.tags))
+        .where(
+            Document.id == document_id,
+            Document.workspace_id == group_id,
+            Document.is_deleted == False
+        )
+    )
+    document = result.scalar_one_or_none()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Không tìm thấy tài liệu trong nhóm này"
+        )
+        
+    if not document.file_type or "pdf" not in document.file_type.lower():
+        raise HTTPException(status_code=400, detail="Chỉ hỗ trợ tạo ảnh bìa từ PDF")
+        
+    import asyncio
+    loop = asyncio.get_event_loop()
+    effective_path = document.file_path
+    temp_file = None
+    if not os.path.exists(effective_path):
+        temp_file = download_r2_to_temp_file(document.file_path, suffix=".pdf")
+        if temp_file and temp_file.exists():
+            effective_path = str(temp_file)
+
+    try:
+        thumbnail_path = await loop.run_in_executor(
+            None, create_thumbnail, effective_path, document.file_type, document.id, page_number
+        )
+    finally:
+        if temp_file and temp_file.exists():
+            try:
+                temp_file.unlink()
+            except Exception:
+                pass
+
+    if thumbnail_path:
+        if os.path.exists(thumbnail_path):
+            try:
+                with open(thumbnail_path, "rb") as f:
+                    upload_bytes_to_r2(thumbnail_path, f.read(), "image/jpeg")
+            except Exception as up_err:
+                import logging
+                logging.getLogger(__name__).warning(f"Lỗi upload thumbnail lên R2: {up_err}")
+        document.thumbnail_path = thumbnail_path
+        await db.commit()
+        await db.refresh(document)
+        return document
+    else:
+        raise HTTPException(status_code=500, detail="Không thể tạo ảnh bìa")
 
 @router.post("/groups/{group_id}/share/folder", response_model=ShareResult)
 async def share_folder(
@@ -556,17 +789,24 @@ async def share_folder(
 async def save_group_document_to_personal(
     group_id: int,
     document_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     await require_member(db, group_id, current_user.id)
-    return await save_to_personal(db, document_id, group_id, current_user.id)
+    saved_doc = await save_to_personal(db, document_id, group_id, current_user.id)
+    background_tasks.add_task(
+        _log_activity, db, document_id, current_user.id,
+        ActivityAction.SAVED, "group", group_id, None, 0,
+    )
+    return saved_doc
 
 
 @router.delete("/groups/{group_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_group_document(
     group_id: int,
     document_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -575,6 +815,10 @@ async def delete_group_document(
     if not document or document.workspace_id != group_id or document.is_deleted:
         raise HTTPException(404, "Không tìm thấy tài liệu")
     await mark_group_document_deleted(db, document)
+    background_tasks.add_task(
+        _log_activity, db, document_id, current_user.id,
+        ActivityAction.DELETED, "group", group_id, None, 0,
+    )
 
 
 @router.get("/groups/{group_id}/members/", response_model=list[MemberOut])
@@ -1095,6 +1339,7 @@ async def list_group_trash(
 async def restore_group_document(
     group_id: int,
     document_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1105,6 +1350,10 @@ async def restore_group_document(
     document.is_deleted = False
     document.deleted_at = None
     await db.commit()
+    background_tasks.add_task(
+        _log_activity, db, document_id, current_user.id,
+        ActivityAction.RESTORED, "group", group_id, None, 0,
+    )
 
 # ==========================================
 # 1. API XÓA THƯ MỤC (Bọc cả 2 route)

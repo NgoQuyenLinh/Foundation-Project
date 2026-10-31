@@ -29,7 +29,7 @@ async def get_login_payload(request: Request) -> UserLogin:
     if "application/json" in content_type:
         try:
             body = await request.json()
-            identifier = body.get("identifier") or body.get("username")
+            identifier = body.get("identifier") or body.get("username") or body.get("email")
             password = body.get("password")
 
             if not identifier or not password:

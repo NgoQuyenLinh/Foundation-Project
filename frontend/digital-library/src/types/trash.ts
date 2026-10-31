@@ -1,27 +1,34 @@
+// frontend/digital-library/src/types/trash.ts
+
 export interface TrashDocument {
   id: number;
   name: string;
   type: string;
   size: string;
-  source: "personal" | "group_orphaned" | "group" | string;
+  sizeBytes?: number;
+  source: string;
   groupName?: string | null;
-  deletedBy?: {
-    id: number;
-    name: string;
-    avatar?: string;
-  };
+  deletedAt: string;
+  deletedTime?: string;
+  remainingDays: number;
+  expiresAt?: string;
+  previewUrl?: string;
+  originalPath?: string;
 }
 
 export interface TrashBatch {
   id: number;
+  dateKey: string;
+  shortDate?: string;
   deletedAt: string;
-  deletedAtTimestamp: number;
+  deletedAtTimestamp: number; // Trường bắt buộc theo khai báo cũ của bạn
   documentCount: number;
   totalSize: string;
+  totalSizeBytes?: number;
+  remainingDays: number;
+  expiresAt: string;
   source: string;
   groupName?: string | null;
-  expiresAt: string;
-  remainingDays: number;
-  documents: TrashDocument[];
   docIds: number[];
+  documents: TrashDocument[];
 }

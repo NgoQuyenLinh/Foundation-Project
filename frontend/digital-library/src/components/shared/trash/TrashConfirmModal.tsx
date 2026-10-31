@@ -1,3 +1,4 @@
+// frontend/digital-library/src/components/shared/trash/TrashConfirmModal.tsx
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
@@ -57,4 +58,4 @@ export function TrashConfirmModal({
       </div>
     </div>
   );
-}
+} 

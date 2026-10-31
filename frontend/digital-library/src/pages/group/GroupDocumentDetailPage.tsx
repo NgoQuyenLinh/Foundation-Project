@@ -44,6 +44,7 @@ export default function GroupDocumentDetailPage() {
       deleteDocumentFn={(dId) => groupService.deleteDocument(groupId, dId)}
       updateTagsFn={(dId, tagIds) => groupService.updateTags(groupId, dId, tagIds)}
       removeTagFn={(dId, tagId) => groupService.removeTag(groupId, dId, tagId)}
+      updateThumbnailPageFn={(dId, page) => groupService.updateThumbnailPage(groupId, dId, page)}
 
       // Prefix cache riêng để không bị đụng độ với tài liệu Cá nhân
       queryKeyPrefix={["group-document", String(groupId)]}

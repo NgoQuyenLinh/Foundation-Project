@@ -1,3 +1,5 @@
+// frontend/digital-library/src/components/shared/documents/FileIcon.tsx
+
 import { FileText, FileCode, FileArchive, File, FileType, FileImage, FileSpreadsheet } from "lucide-react";
 import { cn } from "@/utils/cn";
 
